@@ -3,9 +3,17 @@
 	
     Updated for BoL by ikita
    
-    Base wait for mana regen and health regen/summoner spell, follow menu added by One™, code improvements and bug correction by VictorGrego.
+    Base wait for mana regen and health regen/summoner spell, follow menu added by One™
 	 
-********************** updated and developed by B Boy Breaker for AFK fix ********************* 
+	********************** updated and developed by B Boy Breaker for AFK fix ********************* 
+	
+	Code improvements and bug correction and latest updates by VictorGrego.
+	
+	Changes:
+	- The recall when near a tower issue has been resolved
+	- Recalls after tower, for best safety
+	- Have a menu for dinamic adjust the distance
+	- Now follow partner recall
 ]]
 
 require "MapPosition"
@@ -14,7 +22,18 @@ require "MapPosition"
 local DEFAULT_FOLLOW_DISTANCE = 400
 local DEFAULT_MANA_REGEN = 80
 local DEFAULT_HP_REGEN = 80
+local isRecalling = false
 
+--CONSTANTS
+
+local SetupFollowAlly = true 	-- you start follow near ally when your followtarget have been died
+local SetupRunAway = true 		-- if no ally was near when followtarget died, you run to close tower
+local MIN_DISTANCE = 275
+local HEAL_DISTANCE = 700
+local DEFAULT_HEALTH_THRESHOLD = 70
+local DEFAULT_MANA_THRESHOLD = 66
+local HL_slot = nil
+local CL_slot = nil
 -- SETTINGS
 do
 -- you can change true to false and false to true
@@ -26,18 +45,6 @@ SetupToggleKey = 115 --Key to Toggle script. [ F4 - 115 ] default
 					 --http://www.indigorose.com/webhelp/ams/Program_Reference/Misc/Virtual_Key_Codes.htm
 
 SetupToggleKeyText = "F4"
-
-SetupFollowAlly = true
--- you start follow near ally when your followtarget have been died
-
-SetupRunAway = true
--- if no ally was near when followtarget died, you run to close tower
-
-SetupRunAwayRecall = true
--- if you succesfully recall after followtarget died or recalled, you start recall
-
-SetupFollowRecall = true
--- should you recall as soon as follow target racalled
 
 SetupAutoHold = true -- Need work
 -- stop autohit creeps when following target
@@ -58,6 +65,7 @@ FOLLOW = 1
 TEMP_FOLLOW = -33
 WAITING_FOLLOW_RESP = 150
 GOING_TO_TOWER = 666
+RECALLING = 374
 
 --by default
 state = FOLLOW
@@ -83,11 +91,6 @@ FollowKeysCodes = {116,117,118,119} --Decimal key codes corressponding to key na
 version = 2.2
 player = GetMyHero()
 end
-
-recallStartTime = 0
-recallDetected = false
-
-recentrecallTarget = player
 
 -- ABSTRACTION-METHODS
 
@@ -183,27 +186,23 @@ function OnProcessSpell(object,spellProc) --for soraka + sona
 	end
 end
 
--- is recall, return true/false
-function isRecall(hero)
-	if GetTickCount() - recallStartTime > 8000 then
-		return false
-	else
-		if recentrecallTarget.name == hero.name then
-			return true
-		end
-		return false
+-- OnDeleteObj
+function OnDeleteObj(obj)
+	if obj.name:find("TeleportHome.troy") then
+		-- Set isRecalling off after short delay to prevent using abilities once at base
+		DelayAction(function() isRecalling = false end, 0.2)
 	end
 end
 
+--Detects if my partner is Recalling
 function OnCreateObj(object)
 	if object.name == "TeleportHomeImproved.troy" or object.name == "TeleportHome.troy" then
-		for i = 1, heroManager.iCount do
-			local target = heroManager:GetHero(i)
-			if GetDistance(target, object) < 100 then
-				recentrecallTarget = target
-			end
+		if GetDistance(following, object) < 70 and player:GetDistance(following) <= config.followChamp.followDist then
+			CastSpell(RECALL)
+			isRecalling = true
+		elseif GetDistance(player, object) < 70 then
+			isRecalling = true
 		end
-		recallStartTime = GetTickCount()
 	end
 end
 
@@ -247,8 +246,6 @@ function OnSendChat(text)
 	end
 end
 
-
-
 -- TIMER CALLBACK
 mytime = GetTickCount() 
 
@@ -268,8 +265,7 @@ function OnTick()
 		if carryCheck == false and breaker == false and os.clock() >= breakers + afktime and following == nil then
 			for i = 1, heroManager.iCount, 1 do --get heros
 				local teammates = heroManager:getHero(i)
-				if teammates.team == player.team and teammates.name ~= player.name and teammates.name ~= following and MapPosition:inBase(teammates) == false then 
-					
+				if teammates.team == player.team and teammates.name ~= player.name and teammates.name ~= following.name and MapPosition:inBase(teammates) == false then 
 					following = teammates
 					PrintChat("Passive Follow >> following summoner: "..teammates.name)
 					state = FOLLOW
@@ -301,7 +297,7 @@ function OnTick()
 
 				local teammates = heroManager:getHero(i)
 
-				if teammates.team == player.team and teammates.name ~= player.name and teammates.name ~= following and MapPosition:inBase(teammates) == false then --check if hero is alive, in my team(!) and not the same like before
+				if teammates.team == player.team and teammates.name ~= player.name and teammates.name ~= following.name and MapPosition:inBase(teammates) == false then --check if hero is alive, in my team(!) and not the same like before
 				
 					following = teammates
 					PrintChat("Passive Follow >> following summoner: "..teammates.name)
@@ -332,41 +328,53 @@ function OnTick()
 		end
 		
 		if following ~= nil then
-			Status(following, 1, value)
+			Status(following)
+		end
+		
+		if (following ~= nil and following.dead == false and (following.health/following.maxHealth) * 100 < config.autoSpells.healthThreshold and player:GetDistance(following) <= HEAL_DISTANCE) or (player.health/player.maxHealth) * 100 < config.autoSpells.healthThreshold then
+			if HL_slot ~= nil and player:CanUseSpell(HL_slot) == READY then
+				PrintChat("Passive Follow >> Used summoner spell.")
+				CastSpell(HL_slot)
+			end
+		end
+		
+		-- use summoners if your mana is low 
+		if (player.mana/player.maxMana) * 100 < config.autoSpells.manaThreshold then
+			if CL_slot ~= nil and player:CanUseSpell(CL_slot) == READY then
+				PrintChat("Passive Follow >> Used summoner spell: CLARITY.")
+				CastSpell(CL_slot)
+			end
 		end
 	end
 end
 
 -- STATUS CALLBACK
-function Status(member, desc, value)
-	if member == following and desc == 1 then
-		if member.dead and state == FOLLOW then
-			PrintChat("Passive Follow >> "..member.name.." dead")
-			-- if SetupFollowAlly == true and ALLYNEAR then temporary changing follow target
-			if SetupFollowAlly and player:GetDistance(GetClosePlayer(player,player.team)) < DEFAULT_FOLLOW_DISTANCE then 
-				temp_following = GetClosePlayer(player,player.team)
-				PrintChat("Passive Follow >> "..(GetClosePlayer(player,player.team)).name.." temporary following")
-				state = TEMP_FOLLOW
-			elseif SetupRunAway then 
-				state = GOING_TO_TOWER
-			else
-				state = WAITING_FOLLOW_RESP
-			end
+function Status(member)
+	if member.dead and state == FOLLOW then
+		PrintChat("Passive Follow >> "..member.name.." dead")
+		-- if SetupFollowAlly == true and ALLYNEAR then temporary changing follow target
+		if SetupFollowAlly and player:GetDistance(GetClosePlayer(player,player.team)) < config.followChamp.followDist then 
+			temp_following = GetClosePlayer(player,player.team)
+			PrintChat("Passive Follow >> "..(GetClosePlayer(player,player.team)).name.." temporary following")
+			state = TEMP_FOLLOW
+		elseif SetupRunAway then 
+			state = GOING_TO_TOWER
+		else
+			state = WAITING_FOLLOW_RESP
 		end
-		if member.dead == false then
-			if state == WAITING_FOLLOW_RESP then
-				PrintChat("Passive Follow >> "..member.name.." alive")
-				state = FOLLOW
-			end
-			if state == TEMP_FOLLOW then
-				temp_following = nil
-				PrintChat("Passive Follow >> "..member.name.." alive")
-				state = FOLLOW
-			end
-			if state == GOING_TO_TOWER then
-				PrintChat("Passive Follow >> "..member.name.." alive")
-				state = FOLLOW
-			end
+	end
+	
+	if not member.dead then
+		if state == WAITING_FOLLOW_RESP then
+			PrintChat("Passive Follow >> "..member.name.." alive")
+			state = FOLLOW
+		elseif state == TEMP_FOLLOW then
+			temp_following = nil
+			PrintChat("Passive Follow >> "..member.name.." alive")
+			state = FOLLOW
+		elseif state == GOING_TO_TOWER then
+			PrintChat("Passive Follow >> "..member.name.." alive")
+			state = FOLLOW
 		end
 	end
 end
@@ -375,25 +383,30 @@ end
 -- run(follow) to target
 function Run(target)
 	if target.type == "obj_AI_Hero" then
-		if target:GetDistance(allySpawn) > DEFAULT_FOLLOW_DISTANCE then
-			if (player:GetDistance(target) > DEFAULT_FOLLOW_DISTANCE or player:GetDistance(target) < 275 --[[this is to stop get aoe, which are often 275 range]] or player:GetDistance(allySpawn) + 275 > target:GetDistance(allySpawn)) then
-				followX = ((allySpawn.x - target.x)/(target:GetDistance(allySpawn)) * ((DEFAULT_FOLLOW_DISTANCE - 300) / 2 + 300) + target.x + math.random(-((DEFAULT_FOLLOW_DISTANCE-300)/3),((DEFAULT_FOLLOW_DISTANCE-300)/3)))
-				followZ = ((allySpawn.z - target.z)/(target:GetDistance(allySpawn)) * ((DEFAULT_FOLLOW_DISTANCE - 300) / 2 + 300) + target.z + math.random(-((DEFAULT_FOLLOW_DISTANCE-300)/3),((DEFAULT_FOLLOW_DISTANCE-300)/3)))
+		if target:GetDistance(allySpawn) > config.followChamp.followDist then
+			if (player:GetDistance(target) > config.followChamp.followDist or player:GetDistance(target) < MIN_DISTANCE or player:GetDistance(allySpawn) + MIN_DISTANCE > target:GetDistance(allySpawn)) then
+				followX = ((allySpawn.x - target.x)/(target:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + target.x + math.random(-((config.followChamp.followDist-300)/3),((config.followChamp.followDist-300)/3)))
+				followZ = ((allySpawn.z - target.z)/(target:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + target.z + math.random(-((config.followChamp.followDist-300)/3),((config.followChamp.followDist-300)/3)))
+				
 				player:MoveTo(followX, followZ)
 			else
 				player:HoldPosition()
 			end
-		elseif SetupFollowRecall and player:GetDistance(allySpawn) > (DEFAULT_FOLLOW_DISTANCE * 2) then
+		elseif SetupFollowRecall and player:GetDistance(allySpawn) > (config.followChamp.followDist * 2) then
 			state = GOING_TO_TOWER
 		end
 	end
 	if target.type == "obj_AI_Turret" then 
 		if player:GetDistance(target) > 300 then 
-			player:MoveTo(target.x + math.random(-150,150), target.z + math.random(-150,150))
+			followX = ((allySpawn.x - target.x)/(target:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + target.x + math.random(-((config.followChamp.followDist-300)/3),((config.followChamp.followDist-300)/3)))
+			followZ = ((allySpawn.z - target.z)/(target:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + target.z + math.random(-((config.followChamp.followDist-300)/3),((config.followChamp.followDist-300)/3)))
+			
+			player:MoveTo(followX, followZ)
 		elseif SetupRunAwayRecall then
-			CastSpell(RECALL)
-			if following.dead == true then
+			
+			if following.dead then
 				state = WAITING_FOLLOW_RESP
+				CastSpell(RECALL)
 			else
 				state = FOLLOW
 			end
@@ -403,10 +416,8 @@ end
 
 -- CORE
 function Brain()
-	if following ~= nil and player.dead == false and isRecall(player) == false then 
-		if state == FOLLOW then 
-			Run(following) 
-		end
+	if following ~= nil and player.dead == false and isRecalling == false then 
+		if state == FOLLOW then Run(following) end
 		if state == TEMP_FOLLOW and temp_following ~= nil then Run(temp_following) end
 		if state == GOING_TO_TOWER then Run(GetCloseTower(player,player.team)) end
 		
@@ -434,11 +445,30 @@ function drawMenu()
 	  
 	config:addSubMenu("Follow Champion", "followChamp")
 	config:addSubMenu("Regen at Fountain", "fontRegen")
+	config:addSubMenu("Auto use SumSpells", "autoSpells")
 	
 	config.fontRegen:addParam("hpRegen", "min HP to leave", SCRIPT_PARAM_SLICE, DEFAULT_HP_REGEN, 0, 100, 0)
 	config.fontRegen:addParam("manaRegen", "min Mana to leave", SCRIPT_PARAM_SLICE, DEFAULT_MANA_REGEN, 0, 100, 0)
 	
-	config.followChamp:addParam("followDist", "Follow Distance", SCRIPT_PARAM_SLICE, DEFAULT_FOLLOW_DISTANCE, 400, 1000, 0)
+	--config.autoSpells:addParam("useHeal", "Auto use Heal", SCRIPT_PARAM_ONOFF, false)
+	--config.autoSpells:addParam("useClarity", "Auto use Clarity", SCRIPT_PARAM_ONOFF, false)
+	config.autoSpells:addParam("manaThreshold", "Mana% for use Clarity", SCRIPT_PARAM_SLICE, DEFAULT_MANA_THRESHOLD, 0, 100, 0)
+	config.autoSpells:addParam("healthThreshold", "HP% for use Cure", SCRIPT_PARAM_SLICE, DEFAULT_HEALTH_THRESHOLD, 0, 100, 0)
+	
+	config.followChamp:addParam("followDist", "Follow Distance", SCRIPT_PARAM_SLICE, DEFAULT_FOLLOW_DISTANCE, 400, 800, 0)
+end
+
+--TODO: Support other Spells
+--Set Heal and Clarity
+function setSummonerSlots()
+	--set clarity
+	if player:GetSpellData(SUMMONER_1).name == "SummonerMana" then
+		CL_slot = SUMMONER_1
+		HL_slot = SUMMONER_2
+	elseif player:GetSpellData(SUMMONER_2).name == "SummonerMana" then
+		HL_slot = SUMMONER_1
+		CL_slot = SUMMONER_2
+	end
 end
 
 -- AT LOADING OF SCRIPT
@@ -446,6 +476,7 @@ function OnLoad()
 	breakers = os.clock()   --start timer
 	PrintChat("Passive Follow >> v"..tostring(version).." LOADED")
 	carryCheck = false
+	setSummonerSlots()
 	
 	-- numerate spawn
 	for i=1, objManager.maxObjects, 1 do

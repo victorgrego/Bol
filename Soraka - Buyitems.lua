@@ -10,7 +10,25 @@ if GetMyHero().charName == "Soraka" then
 
 	--[[ Config ]]
 	PrintChat("Support Items Loaded: Soraka")
-	shopList = {1028, 2049, 3096, 3069, 1001, 2045,1028,3105,3158, 1011,3190, 3143, 3275, 1058, 3089}
+	shopList = {
+	1028,--Ruby Crystal
+	2049,--Sighstone
+	3096,--Nomad Medallion
+	3114,--Forbidden Idol
+	3069,--Talisman of Ascension
+	1001,--Boots 
+	2045,--Ruby Sighstone
+	1028,--Ruby Crystal
+	1057,--Negatron Cloak
+	3105,--Aegis of Legion
+	3158,--Ionian Boots
+	1011,--Giants Belt
+	3190,--Locket of Iron Solari
+	3143,--Randuins
+	3275,--Homeguard
+	1058,--Large Rod
+	3089--Rabadon
+	}
 	--item ids can be found at many websites, ie: http://www.lolking.net/items/1004
 
 	nextbuyIndex = 1
