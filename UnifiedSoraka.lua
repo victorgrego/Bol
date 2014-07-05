@@ -580,6 +580,6 @@ function OnLoad()
 	startingTime = GetTickCount()
 	
 	if AutoUpdate then
-		scriptUpdate()
+		Update()
 	end
 end
