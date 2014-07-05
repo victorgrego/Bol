@@ -43,12 +43,12 @@ function UpdateCallback()
 				file:write(content)
 				file:flush()
 				file:close()
-				PrintChat("<font color=\"#81BEF7\" >UnifiedSoraka:</font> <font color=\"#00FF00\">Successfully updated to: v"..Version..". Please reload the script with F9.</font>")
+				PrintChat("<font color=\"#81BEF7\" >GenericFollowAndWalk:</font> <font color=\"#00FF00\">Successfully updated to: v"..Version..". Please reload the script with F9.</font>")
 			else
-				PrintChat("<font color=\"#81BEF7\" >UnifiedSoraka:</font> <font color=\"#FF0000\">Error updating to new version (v"..Version..")</font>")
+				PrintChat("<font color=\"#81BEF7\" >GenericFollowAndWalk:</font> <font color=\"#FF0000\">Error updating to new version (v"..Version..")</font>")
 			end
 			elseif (Version ~= nil) and (Version == tonumber(version)) then
-				PrintChat("<font color=\"#81BEF7\" >UnifiedSoraka:</font> <font color=\"#00FF00\">No updates found, latest version: v"..Version.." </font>")
+				PrintChat("<font color=\"#81BEF7\" >GenericFollowAndWalk:</font> <font color=\"#00FF00\">No updates found, latest version: v"..Version.." </font>")
 			end
 		end
 	end
