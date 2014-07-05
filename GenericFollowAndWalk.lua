@@ -479,4 +479,8 @@ function OnLoad()
 	allies = GetPlayers(player.team, true, false)
 	drawMenu()
 	finishedOnLoad = true
+	
+	if AutoUpdate then
+		Update()
+	end
 end
