@@ -1,4 +1,4 @@
-local version = "1.2"
+local version = "1.21"
 --[[
 This script is a version of All-In-One Soraka by One™ Rewriten by VictorGrego!!!
 
@@ -57,7 +57,7 @@ local AutoUpdate = true
 local SELF = SCRIPT_PATH..GetCurrentEnv().FILE_NAME
 local URL = "https://raw.githubusercontent.com/victorgrego/BolSorakaScripts/master/UnifiedSoraka.lua?"..math.random(100)
 local UPDATE_TMP_FILE = LIB_PATH.."UNSTmp.txt"
-local versionmessage = "<font color=\"#81BEF7\" >Changelog: none</font>"
+local versionmessage = "<font color=\"#81BEF7\" >Changelog: Added option to not harass under tower</font>"
 
 function Update()
 	DownloadFile(URL, UPDATE_TMP_FILE, UpdateCallback)
@@ -459,7 +459,7 @@ end
 --draws Menu
 function drawMenu()
 	-- Config Menu
-	config = scriptConfig("All-In-One Soraka", "All-In-One Soraka")	
+	config = scriptConfig("UnifiedSoraka", "UnifiedSoraka")	
 
 	config:addParam("enableScript", "Enable Script", SCRIPT_PARAM_ONOFF, true)
 	config:addParam("autoLevel", "Auto Level", SCRIPT_PARAM_ONOFF, true)
