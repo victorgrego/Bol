@@ -1,12 +1,6 @@
+local version = "0.9"
 --[[
-    Passive Follow by ivan[russia]
-	
-    Updated for BoL by ikita
-   
-    Base wait for mana regen and health regen/summoner spell, follow menu added by One™
-	 
-	********************** updated and developed by B Boy Breaker for AFK fix ********************* 
-	
+    Freely based in Passive Follow by ivan[russia]
 	Code improvements and bug correction and latest updates by VictorGrego.
 	
 	Changes:
@@ -15,11 +9,52 @@
 	- Have a menu for dinamic adjust the distance
 	- Now follow partner recall
 ]]
-if myHero.charName ~= "Soraka" then return end
 finishedOnLoad = false
 initiated = false
 
+--UPDATE SETTINGS
+local AutoUpdate = true
+local SELF = SCRIPT_PATH..GetCurrentEnv().FILE_NAME
+local URL = "https://raw.githubusercontent.com/victorgrego/BolSorakaScripts/master/GenericFollowAndWalk.lua?"..math.random(100)
+local UPDATE_TMP_FILE = LIB_PATH.."GFWTmp.txt"
+local versionmessage = "<font color=\"#81BEF7\" >Changelog: Flee from towers</font>"
 
+function Update()
+	DownloadFile(URL, UPDATE_TMP_FILE, UpdateCallback)
+end
+
+function UpdateCallback()
+	file = io.open(UPDATE_TMP_FILE, "rb")
+	if file ~= nil then
+		content = file:read("*all")
+		file:close()
+		os.remove(UPDATE_TMP_FILE)
+		if content then
+			tmp, sstart = string.find(content, "local version = \"")
+			if sstart then
+				send, tmp = string.find(content, "\"", sstart+1)
+			end
+			if send then
+				Version = tonumber(string.sub(content, sstart+1, send-1))
+			end
+			if (Version ~= nil) and (Version > tonumber(version)) and content:find("--EOS--") then
+				file = io.open(SELF, "w")
+			if file then
+				file:write(content)
+				file:flush()
+				file:close()
+				PrintChat("<font color=\"#81BEF7\" >UnifiedSoraka:</font> <font color=\"#00FF00\">Successfully updated to: v"..Version..". Please reload the script with F9.</font>")
+			else
+				PrintChat("<font color=\"#81BEF7\" >UnifiedSoraka:</font> <font color=\"#FF0000\">Error updating to new version (v"..Version..")</font>")
+			end
+			elseif (Version ~= nil) and (Version == tonumber(version)) then
+				PrintChat("<font color=\"#81BEF7\" >UnifiedSoraka:</font> <font color=\"#00FF00\">No updates found, latest version: v"..Version.." </font>")
+			end
+		end
+	end
+end
+
+--starting Variables
 function initVariables()
 	--summoners
 	DEFAULT_FOLLOW_DISTANCE = 400
@@ -36,21 +71,15 @@ function initVariables()
 	DEFAULT_MANA_THRESHOLD = 66
 	HL_slot = nil
 	CL_slot = nil
-	-- SETTINGS
-	-- you can change true to false and false to true
-	-- false is turn off
-	-- true is turn on
 
 	SetupToggleKey = 115 --Key to Toggle script. [ F4 - 115 ] default
-						 --key codes
-						 --http://www.indigorose.com/webhelp/ams/Program_Reference/Misc/Virtual_Key_Codes.htm
+
 
 	SetupToggleKeyText = "F4"
 
-	afktime = 180 -- the time if the adc is afk b4 change the follower per second
+	afktime = 180
 
-
-	-- GLOBALS [Do Not Change]
+	-- GLOBALS
 
 	SetupDebug = true
 	following = nil
@@ -64,6 +93,7 @@ function initVariables()
 	SEARCHING_PARTNER = 150
 	GO_TOWER = 666
 	RECALLING = 374
+	AVOID_TOWER = 421
 
 	--by default
 	state = SEARCHING_PARTNER
@@ -87,10 +117,6 @@ function initVariables()
 	FollowKeysCodes = {116,117,118,119} --Decimal key codes corressponding to key names
 	initiated = true
 end
-
-
-
--- ABSTRACTION-METHODS
 
 --return players table
 function GetPlayers(team, includeDead, includeSelf)
@@ -183,11 +209,21 @@ function Run(target)
 			end
 		end
 		return true
-	elseif target.type == "obj_AI_Turret" then 
+	elseif target.type == "obj_AI_Turret" and target.team == player.team then 
 		if player:GetDistance(target) > 200 then 
 			followX = ((allySpawn.x - target.x)/(target:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + target.x)
 			followZ = ((allySpawn.z - target.z)/(target:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + target.z)
 			player:MoveTo(math.floor(followX), math.floor(followZ))
+			return true
+		else
+			return false
+		end
+	elseif target.type == "obj_AI_Turret" and target.team ~= player.team then 
+		if (UnderTurret(player, true)) then
+			followX = player.x - target.x
+			followZ = player.z - target.z
+			
+			player:MoveTo(followX, followZ)
 			return true
 		else
 			return false
@@ -197,6 +233,7 @@ end
 
 -- CORE
 function Brain()
+	--PrintChat(GetTarget().name)
 	--PrintChat("My State: "..state)
 	--if following ~= nil and not player.dead then 
 		if state == RECALLING then 
@@ -223,6 +260,11 @@ function Brain()
 			end
 		elseif state == SEARCHING_PARTNER then 
 			if SearchingPartner() then state = FOLLOW end
+		elseif state == AVOID_TOWER then
+			local result = Run(GetCloseTower(player,TEAM_ENEMY)) 
+			if not result then
+				state = FOLLOW
+			end
 		end
 	--end
 end
@@ -300,7 +342,7 @@ end
 -- Drawing follow menu
 function OnDraw()
 	local tempSetupDrawY = SetupDrawY
-
+	
 	DrawText("Press "..SetupToggleKeyText.." to toggle passive follow script.", MenuTextSize , (WINDOW_W - WINDOW_X) * SetupDrawX, (WINDOW_H - WINDOW_Y) * tempSetupDrawY , 0xffffff00) 
 	tempSetupDrawY = tempSetupDrawY + 0.03
 	
@@ -317,10 +359,8 @@ function OnDeleteObj(obj)
 	if obj.name:find("TeleportHome") then
 		if GetDistance(following, obj) < 70 and player:GetDistance(following) <= config.followChamp.followDist then
 			player:MoveTo(player.x, player.z)
-			state = FOLLOW
+			state = FOLLOW 
 		end
-		-- Set state to Follow after recall off after short delay to prevent using abilities once at base
-		DelayAction(function() state = FOLLOW end, 0.2)
 	end
 end
 
@@ -333,10 +373,10 @@ function OnCreateObj(object)
 		elseif GetDistance(player, object) < 70 then
 			state = RECALLING
 		end
+	elseif object.name:find("yikes") then
+		state = AVOID_TOWER
 	end
 end
-
-
 
 function SearchingPartner()
 	local result = false
@@ -352,8 +392,23 @@ function SearchingPartner()
 	return result
 end
 
--- TIMER CALLBACK
-mytime = GetTickCount() 
+function useSummonerSpell()
+	-- use Heal if you hp is low (currently buggy)
+	if (following ~= nil and following.dead == false and (following.health/following.maxHealth) * 100 < config.autoSpells.healthThreshold and player:GetDistance(following) <= HEAL_DISTANCE) or (player.health/player.maxHealth) * 100 < config.autoSpells.healthThreshold then
+		if HL_slot ~= nil and player:CanUseSpell(HL_slot) == READY then
+			PrintChat("Passive Follow >> Used summoner spell.")
+			CastSpell(HL_slot)
+		end
+	end
+		
+	-- use Clarity if your mana is low 
+	if (player.mana/player.maxMana) * 100 < config.autoSpells.manaThreshold then
+		if CL_slot ~= nil and player:CanUseSpell(CL_slot) == READY then
+			PrintChat("Passive Follow >> Used summoner spell: CLARITY.")
+			CastSpell(CL_slot)
+		end
+	end
+end 
 
 function OnTick()
 	if not finishedOnLoad or not config.enableScript then return end
@@ -404,21 +459,7 @@ function OnTick()
 			--mytime = GetTickCount() 
 		--end
 		
-		-- use Heal if you hp is low (currently buggy)
-		if (following ~= nil and following.dead == false and (following.health/following.maxHealth) * 100 < config.autoSpells.healthThreshold and player:GetDistance(following) <= HEAL_DISTANCE) or (player.health/player.maxHealth) * 100 < config.autoSpells.healthThreshold then
-			if HL_slot ~= nil and player:CanUseSpell(HL_slot) == READY then
-				PrintChat("Passive Follow >> Used summoner spell.")
-				CastSpell(HL_slot)
-			end
-		end
-		
-		-- use Clarity if your mana is low 
-		if (player.mana/player.maxMana) * 100 < config.autoSpells.manaThreshold then
-			if CL_slot ~= nil and player:CanUseSpell(CL_slot) == READY then
-				PrintChat("Passive Follow >> Used summoner spell: CLARITY.")
-				CastSpell(CL_slot)
-			end
-		end
+		useSummonerSpell()
 	end
 end
 
