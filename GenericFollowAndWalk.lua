@@ -1,4 +1,4 @@
-local version = "0.9"
+local version = "1.0"
 --[[
     Freely based in Passive Follow by ivan[russia]
 	Code improvements and bug correction and latest updates by VictorGrego.
