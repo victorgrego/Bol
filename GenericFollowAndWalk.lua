@@ -1,4 +1,4 @@
-local version = "1.0"
+local version = "1.01"
 --[[
     Freely based in Passive Follow by ivan[russia]
 	Code improvements and bug correction and latest updates by VictorGrego.
@@ -116,6 +116,7 @@ function initVariables()
 	FollowKeysText = {"F5", "F6", "F7", "F8"} --Key names for menu
 	FollowKeysCodes = {116,117,118,119} --Decimal key codes corressponding to key names
 	initiated = true
+	focusing = nil
 end
 
 --return players table
@@ -240,6 +241,7 @@ function Brain()
 			if InFountain() then state = FOLLOW
 			else CastSpell(RECALL)end
 		elseif state == FOLLOW then
+			if focusing.type == "obj_AI_Turret" and focusing.team ~= player.team then player:Attack(focusing) end
 			local result = Run(following)
 			if not result then
 				local closest = GetClosePlayer(myHero, player.team)
@@ -324,6 +326,10 @@ function OnProcessSpell(unit,spell)
 	if not finishedOnLoad then return end
 	if config.enableScript == true and unit.name == player.name and (spell.name == "SorakaBasicAttack" or spell.name == "SorakaBasicAttack2") then
 		if(spell.target.name:find("Minion_")~=nil) then	player:MoveTo(player.x + math.random(-((config.followChamp.followDist-300)/3),((config.followChamp.followDist-300)/3)),player.z + math.random(-((config.followChamp.followDist-300)),((config.followChamp.followDist-300)))) end
+	end
+	
+	if spell:lower():find("attack") and unit.name == following.name then
+		focusing = spell.target
 	end
 end
 
