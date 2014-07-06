@@ -1,4 +1,4 @@
-local version = "1.01"
+local version = "1.02"
 --[[
     Freely based in Passive Follow by ivan[russia]
 	Code improvements and bug correction and latest updates by VictorGrego.
@@ -17,7 +17,7 @@ local AutoUpdate = true
 local SELF = SCRIPT_PATH..GetCurrentEnv().FILE_NAME
 local URL = "https://raw.githubusercontent.com/victorgrego/BolSorakaScripts/master/GenericFollowAndWalk.lua?"..math.random(100)
 local UPDATE_TMP_FILE = LIB_PATH.."GFWTmp.txt"
-local versionmessage = "<font color=\"#81BEF7\" >Changelog: Flee from towers</font>"
+local versionmessage = "<font color=\"#81BEF7\" >Changelog: Flee from towers properly</font>"
 
 function Update()
 	DownloadFile(URL, UPDATE_TMP_FILE, UpdateCallback)
@@ -117,6 +117,7 @@ function initVariables()
 	FollowKeysCodes = {116,117,118,119} --Decimal key codes corressponding to key names
 	initiated = true
 	focusing = nil
+	lastFocused = nil
 end
 
 --return players table
@@ -221,8 +222,9 @@ function Run(target)
 		end
 	elseif target.type == "obj_AI_Turret" and target.team ~= player.team then 
 		if (UnderTurret(player, true)) then
-			followX = player.x - target.x
-			followZ = player.z - target.z
+			
+			local followX = (2 * myHero.x) - target.x
+			local followZ = (2 * myHero.z) - target.z
 			
 			player:MoveTo(followX, followZ)
 			return true
@@ -241,7 +243,9 @@ function Brain()
 			if InFountain() then state = FOLLOW
 			else CastSpell(RECALL)end
 		elseif state == FOLLOW then
-			if focusing.type == "obj_AI_Turret" and focusing.team ~= player.team then player:Attack(focusing) end
+			if focusing ~= nil and focusing.type == "obj_AI_Turret" and focusing.team ~= player.team then 
+				player:Attack(focusing) 
+			end
 			local result = Run(following)
 			if not result then
 				local closest = GetClosePlayer(myHero, player.team)
@@ -324,11 +328,12 @@ end
 
 function OnProcessSpell(unit,spell)
 	if not finishedOnLoad then return end
-	if config.enableScript == true and unit.name == player.name and (spell.name == "SorakaBasicAttack" or spell.name == "SorakaBasicAttack2") then
+	if config.enableScript == true and unit.name == player.name and spell.name:lower():find("attack") ~= nil then
 		if(spell.target.name:find("Minion_")~=nil) then	player:MoveTo(player.x + math.random(-((config.followChamp.followDist-300)/3),((config.followChamp.followDist-300)/3)),player.z + math.random(-((config.followChamp.followDist-300)),((config.followChamp.followDist-300)))) end
 	end
 	
-	if spell:lower():find("attack") and unit.name == following.name then
+	if spell.name:lower():find("attack")~=nil and unit.name == following.name and spell.target.type:lower():find("turret") ~= nil then
+		--PrintChat("Spell Created: "..spell.target.type)
 		focusing = spell.target
 	end
 end
