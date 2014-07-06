@@ -1,4 +1,4 @@
-local version = "1.02"
+local version = "1.03"
 --[[
     Freely based in Passive Follow by ivan[russia]
 	Code improvements and bug correction and latest updates by VictorGrego.
@@ -17,7 +17,7 @@ local AutoUpdate = true
 local SELF = SCRIPT_PATH..GetCurrentEnv().FILE_NAME
 local URL = "https://raw.githubusercontent.com/victorgrego/BolSorakaScripts/master/GenericFollowAndWalk.lua?"..math.random(100)
 local UPDATE_TMP_FILE = LIB_PATH.."GFWTmp.txt"
-local versionmessage = "<font color=\"#81BEF7\" >Changelog: Flee from towers properly</font>"
+local versionmessage = "<font color=\"#81BEF7\" >Changelog: Improvements in navigation system!</font>"
 
 function Update()
 	DownloadFile(URL, UPDATE_TMP_FILE, UpdateCallback)
@@ -66,6 +66,7 @@ function initVariables()
 	SetupFollowAlly = true 	-- you start follow near ally when your followtarget have been died
 	SetupRunAway = true 		-- if no ally was near when followtarget died, you run to close tower
 	MIN_DISTANCE = 275
+	FOLLOW_LIMIAR = 300
 	HEAL_DISTANCE = 700
 	DEFAULT_HEALTH_THRESHOLD = 70
 	DEFAULT_MANA_THRESHOLD = 66
@@ -78,7 +79,12 @@ function initVariables()
 	SetupToggleKeyText = "F4"
 
 	afktime = 180
-
+	wanderPoint = nil
+	lastWander = GetTickCount()
+	
+	moveDelay = 500
+	lastMove = GetTickCount()
+	
 	-- GLOBALS
 
 	SetupDebug = true
@@ -201,13 +207,18 @@ function Run(target)
 	if target.type == "AIHeroClient" then
 		if target.dead then return false end
 		if target:GetDistance(allySpawn) > config.followChamp.followDist then
-			if (player:GetDistance(target) > config.followChamp.followDist or player:GetDistance(target) < MIN_DISTANCE or player:GetDistance(allySpawn) + MIN_DISTANCE > target:GetDistance(allySpawn)) then
+			if (player:GetDistance(target) > config.followChamp.followDist + FOLLOW_LIMIAR or player:GetDistance(target) < MIN_DISTANCE or player:GetDistance(allySpawn) + MIN_DISTANCE > target:GetDistance(allySpawn)) then
 				followX = ((allySpawn.x - target.x)/(target:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + target.x + math.random(-((config.followChamp.followDist-300)/3),((config.followChamp.followDist-300)/3)))
 				followZ = ((allySpawn.z - target.z)/(target:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + target.z + math.random(-((config.followChamp.followDist-300)/3),((config.followChamp.followDist-300)/3)))
 				
-				player:MoveTo(followX, followZ)
+				iMove(followX, followZ)
+				wander(target)
 			else
-				player:HoldPosition()
+				if (wanderPoint == nil or (player.x == wanderPoint.x and player.z == wanderPoint.z)) then
+					wander(target)
+				else
+					iMove(wanderPoint.x, wanderPoint.z)
+				end
 			end
 		end
 		return true
@@ -234,10 +245,27 @@ function Run(target)
 	end
 end
 
+function wander(center)
+	local v1 = Vector(center)
+	local v2 = Vector(myHero)
+	local aux = Vector(0,0)
+	local angle = aux:angleBetween(v1,v2)
+	
+	local followX = center.x + math.random(MIN_DISTANCE, FOLLOW_LIMIAR) * math.cos(math.rad(angle))
+	local followZ = center.z + math.random(MIN_DISTANCE, FOLLOW_LIMIAR) * math.sin(math.rad(angle))
+	wanderPoint = {x = followX, z = followZ}
+	lastWander = GetTickCount()
+end
+
+function iMove(x,z)
+	if GetTickCount() < lastMove + moveDelay then return end
+	
+	player:MoveTo(x, z)
+	lastMove = GetTickCount()
+end
+
 -- CORE
 function Brain()
-	--PrintChat(GetTarget().name)
-	--PrintChat("My State: "..state)
 	--if following ~= nil and not player.dead then 
 		if state == RECALLING then 
 			if InFountain() then state = FOLLOW
@@ -329,7 +357,7 @@ end
 function OnProcessSpell(unit,spell)
 	if not finishedOnLoad then return end
 	if config.enableScript == true and unit.name == player.name and spell.name:lower():find("attack") ~= nil then
-		if(spell.target.name:find("Minion_")~=nil) then	player:MoveTo(player.x + math.random(-((config.followChamp.followDist-300)/3),((config.followChamp.followDist-300)/3)),player.z + math.random(-((config.followChamp.followDist-300)),((config.followChamp.followDist-300)))) end
+		if(spell.target.name:find("Minion_")~=nil) then	player:HoldPosition() end
 	end
 	
 	if spell.name:lower():find("attack")~=nil and unit.name == following.name and spell.target.type:lower():find("turret") ~= nil then
