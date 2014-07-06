@@ -1,4 +1,4 @@
-local version = "1.04"
+local version = "1.05"
 --[[
     Freely based in Passive Follow by ivan[russia]
 	Code improvements and bug correction and latest updates by VictorGrego.
@@ -78,7 +78,7 @@ function initVariables()
 
 	SetupToggleKeyText = "F4"
 
-	afktime = 180
+	AFK_MAXTIME = 120
 	wanderPoint = nil
 	lastWander = GetTickCount()
 	
@@ -456,6 +456,42 @@ function useSummonerSpell()
 	end
 end 
 
+function followAnyAfterTime()
+	-- If noone after bot, then follow any!
+	if not carryCheck and not breaker and os.clock() >= breakers + AFK_MAXTIME and following == nil then
+		local toFollow = GetPlayers(player.team, true, false)
+		for i = 1, #toFollow, 1 do --get heros
+			if following:GetDistance(allySpawn) > 5000 then 
+				following = toFollow[i]
+				PrintChat("Passive Follow >> following summoner: "..toFollow[i].name)
+				state = FOLLOW
+				carryCheck = true
+				breakers = os.clock()
+			end
+		end
+	end
+end
+
+function checkFollowerAfk()
+	-- Check if target is at base, and activate a timer.
+	if carryCheck == true and breaker == false then
+		if following:GetDistance(allySpawn) < 5000 then
+			breakers = os.clock()
+			breaker = true
+		end
+	end
+
+	-- If tolerance time finished, search for new partner, else continue following previous.
+	if carryCheck == true and breaker == true then
+		if os.clock() >= breakers + AFK_MAXTIME then
+			followAnyAfterTime()
+		elseif following:GetDistance(allySpawn) > 5000 then
+			breaker = false
+		end
+	end
+end
+
+
 function OnTick()
 	if not finishedOnLoad or not config.enableScript then return end
 	-- if in fountain and has no mana/hp, wait to fill up mana/hp bar before heading back out
@@ -465,45 +501,11 @@ function OnTick()
 	else
 		isRegen = false
 		
-		-- if there is no one go to bot "no adc(follower target)"
-		if carryCheck == false and breaker == false and os.clock() >= breakers + afktime and following == nil then
-			local toFollow = GetPlayers(player.team, true, false)
-			for i = 1, #toFollow, 1 do --get heros
-				if toFollow[i].name ~= following.name and following:GetDistance(allySpawn) > 5000 then 
-					following = toFollow[i]
-					PrintChat("Passive Follow >> following summoner: "..toFollow[i].name)
-					state = FOLLOW
-					carryCheck = true
-					breakers = os.clock()
-				end
-			end
-		end
+		followAnyAfterTime()
 		
-		-- if the target is afk
-		if carryCheck == true and breaker == false then
-			if following:GetDistance(allySpawn) < 5000 then
-				breakers = os.clock()
-				breaker = true
-			end
-		end
+		checkFollowerAfk()
 
-		-- if the target moved again after afk "maybe the adc recall or die"
-		if carryCheck == true and breaker == true then
-			if following:GetDistance(allySpawn) > 5000 then
-				breaker = false
-			end
-		end
-
-		--Identify AD carry and follow
-		if carryCheck == false then
-			--TODO: Check if includeDead affects
-			
-		end
-
-		--if GetTickCount() - mytime > 800 and config.enableScript then 
-			Brain()
-			--mytime = GetTickCount() 
-		--end
+		Brain()
 		
 		useSummonerSpell()
 	end
