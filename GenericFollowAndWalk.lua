@@ -1,4 +1,4 @@
-local version = "1.03"
+local version = "1.04"
 --[[
     Freely based in Passive Follow by ivan[russia]
 	Code improvements and bug correction and latest updates by VictorGrego.
@@ -66,7 +66,7 @@ function initVariables()
 	SetupFollowAlly = true 	-- you start follow near ally when your followtarget have been died
 	SetupRunAway = true 		-- if no ally was near when followtarget died, you run to close tower
 	MIN_DISTANCE = 275
-	FOLLOW_LIMIAR = 300
+	FOLLOW_LIMIAR = 500
 	HEAL_DISTANCE = 700
 	DEFAULT_HEALTH_THRESHOLD = 70
 	DEFAULT_MANA_THRESHOLD = 66
@@ -82,7 +82,7 @@ function initVariables()
 	wanderPoint = nil
 	lastWander = GetTickCount()
 	
-	moveDelay = 500
+	moveDelay = 333
 	lastMove = GetTickCount()
 	
 	-- GLOBALS
@@ -246,21 +246,26 @@ function Run(target)
 end
 
 function wander(center)
-	local v1 = Vector(center)
-	local v2 = Vector(myHero)
-	local aux = Vector(0,0)
-	local angle = aux:angleBetween(v1,v2)
+	local v1 = Vector(center.x + math.floor(math.random(-FOLLOW_LIMIAR,FOLLOW_LIMIAR)), center.z + math.floor(math.random(-FOLLOW_LIMIAR, FOLLOW_LIMIAR)))
+	local v2 = Vector(center)
+	local aux = Vector(center)
+	--local angle = aux:angleBetween(v1,v2)
+	local radius = math.floor(math.random(MIN_DISTANCE, FOLLOW_LIMIAR))
+	local angle = math.floor(math.random(1,360))
 	
-	local followX = center.x + math.random(MIN_DISTANCE, FOLLOW_LIMIAR) * math.cos(math.rad(angle))
-	local followZ = center.z + math.random(MIN_DISTANCE, FOLLOW_LIMIAR) * math.sin(math.rad(angle))
-	wanderPoint = {x = followX, z = followZ}
+	local followX = center.x + radius * math.cos(math.rad(angle))
+	local followY = center.y + radius * math.sin(math.rad(angle))
+	local followZ = center.z + radius * math.sin(math.rad(angle))
+	
+	wanderPoint = {x = followX, y = followY, z = followZ}
 	lastWander = GetTickCount()
 end
 
 function iMove(x,z)
 	if GetTickCount() < lastMove + moveDelay then return end
 	
-	player:MoveTo(x, z)
+	if player.x ~= x and player.z ~= z then player:MoveTo(x, z)
+	else wander(following) end
 	lastMove = GetTickCount()
 end
 
@@ -271,9 +276,9 @@ function Brain()
 			if InFountain() then state = FOLLOW
 			else CastSpell(RECALL)end
 		elseif state == FOLLOW then
-			if focusing ~= nil and focusing.type == "obj_AI_Turret" and focusing.team ~= player.team then 
+			--[[if focusing ~= nil and focusing.type == "obj_AI_Turret" and focusing.team ~= player.team then 
 				player:Attack(focusing) 
-			end
+			end]]
 			local result = Run(following)
 			if not result then
 				local closest = GetClosePlayer(myHero, player.team)
@@ -382,6 +387,8 @@ end
 function OnDraw()
 	local tempSetupDrawY = SetupDrawY
 	
+	--if wanderPoint~= nil then DrawLine3D(player.x, player.y, player.z, wanderPoint.x, wanderPoint.y, wanderPoint.z, 1, ARGB(255,255,255,255)) end
+	
 	DrawText("Press "..SetupToggleKeyText.." to toggle passive follow script.", MenuTextSize , (WINDOW_W - WINDOW_X) * SetupDrawX, (WINDOW_H - WINDOW_Y) * tempSetupDrawY , 0xffffff00) 
 	tempSetupDrawY = tempSetupDrawY + 0.03
 	
@@ -397,8 +404,8 @@ end
 function OnDeleteObj(obj)
 	if obj.name:find("TeleportHome") then
 		if GetDistance(following, obj) < 70 and player:GetDistance(following) <= config.followChamp.followDist then
-			player:MoveTo(player.x, player.z)
-			state = FOLLOW 
+			DelayAction(function() player:MoveTo(player.x, player.z)
+			state = FOLLOW end, 10)
 		end
 	end
 end
