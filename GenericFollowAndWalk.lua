@@ -1,4 +1,4 @@
-local version = "1.05"
+local version = "1.06"
 --[[
     Freely based in Passive Follow by ivan[russia]
 	Code improvements and bug correction and latest updates by VictorGrego.
@@ -17,7 +17,7 @@ local AutoUpdate = true
 local SELF = SCRIPT_PATH..GetCurrentEnv().FILE_NAME
 local URL = "https://raw.githubusercontent.com/victorgrego/BolSorakaScripts/master/GenericFollowAndWalk.lua?"..math.random(100)
 local UPDATE_TMP_FILE = LIB_PATH.."GFWTmp.txt"
-local versionmessage = "<font color=\"#81BEF7\" >Changelog: Improvements in navigation system!</font>"
+local versionmessage = "<font color=\"#81BEF7\" >Changelog: AFK, Partner Selection and Recalling system fixed and upgraded!!!</font>"
 
 function Update()
 	DownloadFile(URL, UPDATE_TMP_FILE, UpdateCallback)
@@ -64,7 +64,7 @@ function initVariables()
 	--CONSTANTS
 
 	SetupFollowAlly = true 	-- you start follow near ally when your followtarget have been died
-	SetupRunAway = true 		-- if no ally was near when followtarget died, you run to close tower
+	SetupRunAway = true 	-- if no ally was near when followtarget died, you run to close tower
 	MIN_DISTANCE = 275
 	FOLLOW_LIMIAR = 500
 	HEAL_DISTANCE = 700
@@ -91,7 +91,8 @@ function initVariables()
 	following = nil
 	temp_following = nil
 	stopPosition = false
-	breaker = false
+	partnerAfk = true
+	havePartner = false
 
 	--state of app enum
 	FOLLOW = 1
@@ -272,39 +273,41 @@ end
 -- CORE
 function Brain()
 	--if following ~= nil and not player.dead then 
-		if state == RECALLING then 
-			if InFountain() then state = FOLLOW
-			else CastSpell(RECALL)end
-		elseif state == FOLLOW then
-			--[[if focusing ~= nil and focusing.type == "obj_AI_Turret" and focusing.team ~= player.team then 
-				player:Attack(focusing) 
-			end]]
-			local result = Run(following)
-			if not result then
-				local closest = GetClosePlayer(myHero, player.team)
-				if closest and myHero:GetDistance(closest) < 750 then
-					temp_following = closest
-					state = TEMP_FOLLOW
-				else
-					state = GO_TOWER
-				end
-			end
-		elseif state == TEMP_FOLLOW then 
-			if following.dead then Run(temp_following)
-			else state = FOLLOW end
-		elseif state == GO_TOWER then 
-			local result = Run(GetCloseTower(player,player.team)) 
-			if not result then
-				state = RECALLING
-			end
-		elseif state == SEARCHING_PARTNER then 
-			if SearchingPartner() then state = FOLLOW end
-		elseif state == AVOID_TOWER then
-			local result = Run(GetCloseTower(player,TEAM_ENEMY)) 
-			if not result then
-				state = FOLLOW
+	if state == RECALLING then 
+		if InFountain() then state = FOLLOW
+		else CastSpell(RECALL) end
+		return false
+	elseif state == FOLLOW then
+		--[[if focusing ~= nil and focusing.type == "obj_AI_Turret" and focusing.team ~= player.team then 
+			player:Attack(focusing) 
+		end]]
+		local result = Run(following)
+		if not result then
+			local closest = GetClosePlayer(myHero, player.team)
+			if closest and myHero:GetDistance(closest) < 750 then
+				temp_following = closest
+				state = TEMP_FOLLOW
+			else
+				state = GO_TOWER
 			end
 		end
+	elseif state == TEMP_FOLLOW then 
+		if following.dead then Run(temp_following)
+		else state = FOLLOW end
+	elseif state == GO_TOWER then 
+		local result = Run(GetCloseTower(player,player.team)) 
+		if not result then
+			state = RECALLING
+		end
+	elseif state == SEARCHING_PARTNER then 
+		if SearchingPartner() then state = FOLLOW end
+	elseif state == AVOID_TOWER then
+		local result = Run(GetCloseTower(player,TEAM_ENEMY)) 
+		if not result then
+			state = FOLLOW
+		end
+	end
+	return true
 	--end
 end
 
@@ -386,7 +389,7 @@ end
 -- Drawing follow menu
 function OnDraw()
 	local tempSetupDrawY = SetupDrawY
-	
+	--DrawCircle(allySpawn.x, allySpawn.y, allySpawn.z, 2000, ARGB(255,255,0,0))
 	--if wanderPoint~= nil then DrawLine3D(player.x, player.y, player.z, wanderPoint.x, wanderPoint.y, wanderPoint.z, 1, ARGB(255,255,255,255)) end
 	
 	DrawText("Press "..SetupToggleKeyText.." to toggle passive follow script.", MenuTextSize , (WINDOW_W - WINDOW_X) * SetupDrawX, (WINDOW_H - WINDOW_Y) * tempSetupDrawY , 0xffffff00) 
@@ -402,21 +405,23 @@ end
 
 -- OnDeleteObj
 function OnDeleteObj(obj)
-	if obj.name:find("TeleportHome") then
-		if GetDistance(following, obj) < 70 and player:GetDistance(following) <= config.followChamp.followDist then
+	if obj.name:find("TeleportHome") ~= nil then
+		if (GetDistance(following, obj) < 70 and player:GetDistance(following) <= config.followChamp.followDist+ FOLLOW_LIMIAR) or player:GetDistance(obj) < 70 then
 			DelayAction(function() player:MoveTo(player.x, player.z)
-			state = FOLLOW end, 10)
+			state = FOLLOW end,0.2)
 		end
 	end
 end
 
 --Detects if my partner is Recalling
 function OnCreateObj(object)
-	if object.name == "TeleportHomeImproved.troy" or object.name == "TeleportHome.troy" then
-		if GetDistance(following, object) < 70 and player:GetDistance(following) <= config.followChamp.followDist then
+	if object.name:find("TeleportHome") ~= nil  then
+		if GetDistance(following, object) < 70 and player:GetDistance(following) <= config.followChamp.followDist + FOLLOW_LIMIAR then
+			player:HoldPosition()
 			CastSpell(RECALL)
 			state = RECALLING
 		elseif GetDistance(player, object) < 70 then
+			player:HoldPosition()
 			state = RECALLING
 		end
 	elseif object.name:find("yikes") then
@@ -433,6 +438,8 @@ function SearchingPartner()
 			following = myCarry[i]
 			PrintChat("Passive Follow >> following summoner: "..myCarry[i].name)
 			result = true
+			havePartner = true
+			partnerAfk = false
 		end
 	end
 	return result
@@ -458,36 +465,43 @@ end
 
 function followAnyAfterTime()
 	-- If noone after bot, then follow any!
-	if not carryCheck and not breaker and os.clock() >= breakers + AFK_MAXTIME and following == nil then
+	--if carryCheck then PrintChat("carryCheck") else PrintChat("noCarryCheck") end
+	--if partnerAfk then PrintChat("partnerAfk") else PrintChat("noPartnerAfk") end
+	if not havePartner and partnerAfk then
 		local toFollow = GetPlayers(player.team, true, false)
 		for i = 1, #toFollow, 1 do --get heros
-			if following:GetDistance(allySpawn) > 5000 then 
+			if toFollow[i]:GetDistance(allySpawn) > 5000 then 
 				following = toFollow[i]
 				PrintChat("Passive Follow >> following summoner: "..toFollow[i].name)
 				state = FOLLOW
-				carryCheck = true
-				breakers = os.clock()
+				havePartner = true
+				afkTimerCount = GetGameTimer()
 			end
 		end
 	end
 end
 
-function checkFollowerAfk()
+function checkPartnerAfk()
 	-- Check if target is at base, and activate a timer.
-	if carryCheck == true and breaker == false then
+	if havePartner and not partnerAfk then
 		if following:GetDistance(allySpawn) < 5000 then
-			breakers = os.clock()
-			breaker = true
+			afkTimerCount = GetGameTimer()
+			partnerAfk = true
 		end
 	end
 
 	-- If tolerance time finished, search for new partner, else continue following previous.
-	if carryCheck == true and breaker == true then
-		if os.clock() >= breakers + AFK_MAXTIME then
+	if havePartner and partnerAfk then
+		if GetGameTimer() >= afkTimerCount + AFK_MAXTIME then
+			havePartner = false
 			followAnyAfterTime()
 		elseif following:GetDistance(allySpawn) > 5000 then
-			breaker = false
+			partnerAfk = false
 		end
+	end
+	
+	if not havePartner and partnerAfk and GetGameTimer() >= afkTimerCount + AFK_MAXTIME then
+		followAnyAfterTime()
 	end
 end
 
@@ -501,12 +515,8 @@ function OnTick()
 	else
 		isRegen = false
 		
-		followAnyAfterTime()
-		
-		checkFollowerAfk()
-
-		Brain()
-		
+		if not Brain() then return end
+		checkPartnerAfk()
 		useSummonerSpell()
 	end
 end
@@ -516,8 +526,7 @@ function OnLoad()
 	
 	player = GetMyHero()
 	initVariables()
-	breakers = os.clock()   --start timer
-	carryCheck = false
+	afkTimerCount = GetGameTimer()   --start timer
 	PrintChat("Passive Follow >> LOADED")
 	
 	setSummonerSlots()
