@@ -1,4 +1,4 @@
-local version = "1.07"
+local version = "1.08"
 --[[
     Freely based in Passive Follow by ivan[russia]
 	Code improvements and bug correction and latest updates by VictorGrego.
@@ -17,7 +17,7 @@ local AutoUpdate = true
 local SELF = SCRIPT_PATH..GetCurrentEnv().FILE_NAME
 local URL = "https://raw.githubusercontent.com/victorgrego/BolSorakaScripts/master/GenericFollowAndWalk.lua?"..math.random(100)
 local UPDATE_TMP_FILE = LIB_PATH.."GFWTmp.txt"
-local versionmessage = "<font color=\"#81BEF7\" >Changelog: Now After 60 Seconds soraka selects the partner closest to bot lane</font>"
+local versionmessage = "<font color=\"#81BEF7\" >Changelog: Corrected a bug where soraka would stuck in font/towers</font>"
 
 function Update()
 	DownloadFile(URL, UPDATE_TMP_FILE, UpdateCallback)
@@ -98,11 +98,11 @@ function initVariables()
 
 	--state of app enum
 	FOLLOW = 1
-	TEMP_FOLLOW = -33
-	SEARCHING_PARTNER = 150
-	GO_TOWER = 666
-	RECALLING = 374
-	AVOID_TOWER = 421
+	TEMP_FOLLOW = "TEMPORARY_FOLLOWING"
+	SEARCHING_PARTNER = "SEARCHING_PARTNER"
+	GO_TOWER = "GOING_TO_TOWER"
+	RECALLING = "RECALLING"
+	AVOID_TOWER = "AVOIDING_TOWER"
 
 	--by default
 	state = SEARCHING_PARTNER
@@ -209,6 +209,7 @@ end
 function Run(target)
 	if target.type == "AIHeroClient" then
 		if target.dead then return false end
+		if target.dead and InFountain() then return true end
 		if target:GetDistance(allySpawn) > config.followChamp.followDist then
 			if (player:GetDistance(target) > config.followChamp.followDist + FOLLOW_LIMIAR or player:GetDistance(target) < MIN_DISTANCE or player:GetDistance(allySpawn) + MIN_DISTANCE > target:GetDistance(allySpawn)) then
 				followX = ((allySpawn.x - target.x)/(target:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + target.x + math.random(-((config.followChamp.followDist-300)/3),((config.followChamp.followDist-300)/3)))
@@ -283,6 +284,7 @@ function Brain()
 		--[[if focusing ~= nil and focusing.type == "obj_AI_Turret" and focusing.team ~= player.team then 
 			player:Attack(focusing) 
 		end]]
+		if player.dead then return false end
 		local result = Run(following)
 		if not result then
 			local closest = GetClosePlayer(myHero, player.team)
@@ -367,9 +369,6 @@ end
 
 function OnProcessSpell(unit,spell)
 	if not finishedOnLoad then return end
-	--[[if config.enableScript == true and unit.name == player.name and spell.name:lower():find("attack") ~= nil then
-		if(spell.target.name:find("Minion_")~=nil) then	player:HoldPosition() end
-	end]]
 	
 	if spell.name:lower():find("attack")~=nil and unit.name == following.name and spell.target.type:lower():find("turret") ~= nil then
 		--PrintChat("Spell Created: "..spell.target.type)
@@ -411,7 +410,7 @@ function OnDeleteObj(obj)
 	if obj.name:find("TeleportHome") ~= nil then
 		if (GetDistance(following, obj) < 70 and player:GetDistance(following) <= config.followChamp.followDist+ FOLLOW_LIMIAR) or player:GetDistance(obj) < 70 then
 			DelayAction(function() player:MoveTo(player.x, player.z)
-			state = FOLLOW end,0.2)
+			state = FOLLOW end,0.5)
 		end
 	end
 end
