@@ -1,4 +1,4 @@
-local version = "1.06"
+local version = "1.07"
 --[[
     Freely based in Passive Follow by ivan[russia]
 	Code improvements and bug correction and latest updates by VictorGrego.
@@ -17,7 +17,7 @@ local AutoUpdate = true
 local SELF = SCRIPT_PATH..GetCurrentEnv().FILE_NAME
 local URL = "https://raw.githubusercontent.com/victorgrego/BolSorakaScripts/master/GenericFollowAndWalk.lua?"..math.random(100)
 local UPDATE_TMP_FILE = LIB_PATH.."GFWTmp.txt"
-local versionmessage = "<font color=\"#81BEF7\" >Changelog: AFK, Partner Selection and Recalling system fixed and upgraded!!!</font>"
+local versionmessage = "<font color=\"#81BEF7\" >Changelog: Now After 60 Seconds soraka selects the partner closest to bot lane</font>"
 
 function Update()
 	DownloadFile(URL, UPDATE_TMP_FILE, UpdateCallback)
@@ -79,6 +79,8 @@ function initVariables()
 	SetupToggleKeyText = "F4"
 
 	AFK_MAXTIME = 120
+	INIT_CHOOSE_TIME = 60
+	INIT_GAME_TIME = nil
 	wanderPoint = nil
 	lastWander = GetTickCount()
 	
@@ -320,6 +322,7 @@ function drawMenu()
 	config:addSubMenu("Follow Champion", "followChamp")
 	config:addSubMenu("Regen at Fountain", "fontRegen")
 	config:addSubMenu("Auto use SumSpells", "autoSpells")
+	config:addSubMenu("Auto Navigate: UNDER DEVELOPMENT", "autoNavigate")
 	
 	config.fontRegen:addParam("hpRegen", "min HP to leave", SCRIPT_PARAM_SLICE, DEFAULT_HP_REGEN, 0, 100, 0)
 	config.fontRegen:addParam("manaRegen", "min Mana to leave", SCRIPT_PARAM_SLICE, DEFAULT_MANA_REGEN, 0, 100, 0)
@@ -364,9 +367,9 @@ end
 
 function OnProcessSpell(unit,spell)
 	if not finishedOnLoad then return end
-	if config.enableScript == true and unit.name == player.name and spell.name:lower():find("attack") ~= nil then
+	--[[if config.enableScript == true and unit.name == player.name and spell.name:lower():find("attack") ~= nil then
 		if(spell.target.name:find("Minion_")~=nil) then	player:HoldPosition() end
-	end
+	end]]
 	
 	if spell.name:lower():find("attack")~=nil and unit.name == following.name and spell.target.type:lower():find("turret") ~= nil then
 		--PrintChat("Spell Created: "..spell.target.type)
@@ -389,7 +392,7 @@ end
 -- Drawing follow menu
 function OnDraw()
 	local tempSetupDrawY = SetupDrawY
-	--DrawCircle(allySpawn.x, allySpawn.y, allySpawn.z, 2000, ARGB(255,255,0,0))
+	DrawCircle(12143, 0, 2190, 200, ARGB(255,255,0,0))
 	--if wanderPoint~= nil then DrawLine3D(player.x, player.y, player.z, wanderPoint.x, wanderPoint.y, wanderPoint.z, 1, ARGB(255,255,255,255)) end
 	
 	DrawText("Press "..SetupToggleKeyText.." to toggle passive follow script.", MenuTextSize , (WINDOW_W - WINDOW_X) * SetupDrawX, (WINDOW_H - WINDOW_Y) * tempSetupDrawY , 0xffffff00) 
@@ -417,12 +420,11 @@ end
 function OnCreateObj(object)
 	if object.name:find("TeleportHome") ~= nil  then
 		if GetDistance(following, object) < 70 and player:GetDistance(following) <= config.followChamp.followDist + FOLLOW_LIMIAR then
-			player:HoldPosition()
+			state = RECALLING
 			CastSpell(RECALL)
-			state = RECALLING
 		elseif GetDistance(player, object) < 70 then
-			player:HoldPosition()
 			state = RECALLING
+			CastSpell(RECALL)
 		end
 	elseif object.name:find("yikes") then
 		state = AVOID_TOWER
@@ -430,19 +432,21 @@ function OnCreateObj(object)
 end
 
 function SearchingPartner()
-	local result = false
+	if(GetGameTimer() < INIT_CHOOSE_TIME + INIT_GAME_TIME) then return end
+	local bottomPoint = Vector(12143, 2190)
 	local myCarry = GetPlayers(player.team, false, false)
-	for i = 1, #myCarry, 1 do
-		--Coordinates are for bottom lane only
-		if math.sqrt((myCarry[i].x - 12143)^2 + (myCarry[i].z - 2190)^2) < 4500 then
-			following = myCarry[i]
-			PrintChat("Passive Follow >> following summoner: "..myCarry[i].name)
-			result = true
-			havePartner = true
-			partnerAfk = false
+	following = myCarry[1]
+	havePartner = true
+	partnerAfk = false
+	
+	for i = 2, #myCarry, 1 do
+		if GetDistance(bottomPoint,myCarry[i]) < GetDistance(bottomPoint,following) then
+			following = myCarry[i]		
 		end
 	end
-	return result
+	
+	PrintChat("Passive Follow >> following summoner: "..following.name)
+	return true
 end
 
 function useSummonerSpell()
@@ -527,6 +531,7 @@ function OnLoad()
 	player = GetMyHero()
 	initVariables()
 	afkTimerCount = GetGameTimer()   --start timer
+	INIT_GAME_TIME = GetGameTimer()
 	PrintChat("Passive Follow >> LOADED")
 	
 	setSummonerSlots()
