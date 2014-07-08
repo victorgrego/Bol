@@ -391,7 +391,7 @@ end
 -- Drawing follow menu
 function OnDraw()
 	local tempSetupDrawY = SetupDrawY
-	DrawCircle(12143, 0, 2190, 200, ARGB(255,255,0,0))
+	--DrawCircle(12143, 0, 2190, 200, ARGB(255,255,0,0))
 	--if wanderPoint~= nil then DrawLine3D(player.x, player.y, player.z, wanderPoint.x, wanderPoint.y, wanderPoint.z, 1, ARGB(255,255,255,255)) end
 	
 	DrawText("Press "..SetupToggleKeyText.." to toggle passive follow script.", MenuTextSize , (WINDOW_W - WINDOW_X) * SetupDrawX, (WINDOW_H - WINDOW_Y) * tempSetupDrawY , 0xffffff00) 
