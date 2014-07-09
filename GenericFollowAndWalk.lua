@@ -1,4 +1,4 @@
-local version = "1.08"
+local version = "1.09"
 --[[
     Freely based in Passive Follow by ivan[russia]
 	Code improvements and bug correction and latest updates by VictorGrego.
@@ -103,6 +103,7 @@ function initVariables()
 	GO_TOWER = "GOING_TO_TOWER"
 	RECALLING = "RECALLING"
 	AVOID_TOWER = "AVOIDING_TOWER"
+	WAITING_RESSURECT = "WAITING_RESSURECT"
 
 	--by default
 	state = SEARCHING_PARTNER
@@ -277,7 +278,7 @@ end
 function Brain()
 	--if following ~= nil and not player.dead then 
 	if state == RECALLING then 
-		if InFountain() then state = FOLLOW
+		if InFountain() then state = WAITING_RESSURECT
 		else CastSpell(RECALL) end
 		return false
 	elseif state == FOLLOW then
@@ -310,6 +311,8 @@ function Brain()
 		if not result then
 			state = FOLLOW
 		end
+	elseif start == WAITING_RESSURECT then
+		if not following.dead then state = FOLLOW end
 	end
 	return true
 	--end
