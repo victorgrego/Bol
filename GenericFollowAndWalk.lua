@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 local version = "1.1"
+=======
+local version = "1.08"
+>>>>>>> parent of 40b1855... Stuck in tower bug correction
 --[[
 	GenericFollowAndWalk is a Behavior Tree Script mantained by VictorGrego
 ]]
@@ -76,12 +80,32 @@ end
 -- Selector Class
 Selector = Task:new()
 
+<<<<<<< HEAD
 function Selector:run()
 	for i, v in ipairs(self) do
 		if v:run() then return true end
 	end
 	return false
 end
+=======
+	SetupDebug = true
+	following = nil
+	temp_following = nil
+	stopPosition = false
+	partnerAfk = true
+	havePartner = false
+
+	--state of app enum
+	FOLLOW = 1
+	TEMP_FOLLOW = "TEMPORARY_FOLLOWING"
+	SEARCHING_PARTNER = "SEARCHING_PARTNER"
+	GO_TOWER = "GOING_TO_TOWER"
+	RECALLING = "RECALLING"
+	AVOID_TOWER = "AVOIDING_TOWER"
+
+	--by default
+	state = SEARCHING_PARTNER
+>>>>>>> parent of 40b1855... Stuck in tower bug correction
 
 --Sequence Class
 Sequence = Task:new()
@@ -411,6 +435,7 @@ function OnCreateObj(object)
 	end
 end
 
+<<<<<<< HEAD
 function OnDraw()
 	if partner ~= nil then DrawCircle(partner.x, partner.y, partner.z, 70, ARGB(200,255,255,0)) end
 	if config.followChamp.drawFollowDist then DrawCircle(myHero.x, myHero.y, myHero.z, config.followChamp.followDist, ARGB(200,1,33,0)) end
@@ -419,6 +444,45 @@ end
 function OnTick()
 	if(config.enableScript)then
 		root:run()
+=======
+-- CORE
+function Brain()
+	--if following ~= nil and not player.dead then 
+	if state == RECALLING then 
+		if InFountain() then state = FOLLOW
+		else CastSpell(RECALL) end
+		return false
+	elseif state == FOLLOW then
+		--[[if focusing ~= nil and focusing.type == "obj_AI_Turret" and focusing.team ~= player.team then 
+			player:Attack(focusing) 
+		end]]
+		if player.dead then return false end
+		local result = Run(following)
+		if not result then
+			local closest = GetClosePlayer(myHero, player.team)
+			if closest and myHero:GetDistance(closest) < 750 then
+				temp_following = closest
+				state = TEMP_FOLLOW
+			else
+				state = GO_TOWER
+			end
+		end
+	elseif state == TEMP_FOLLOW then 
+		if following.dead then Run(temp_following)
+		else state = FOLLOW end
+	elseif state == GO_TOWER then 
+		local result = Run(GetCloseTower(player,player.team)) 
+		if not result then
+			state = RECALLING
+		end
+	elseif state == SEARCHING_PARTNER then 
+		if SearchingPartner() then state = FOLLOW end
+	elseif state == AVOID_TOWER then
+		local result = Run(GetCloseTower(player,TEAM_ENEMY)) 
+		if not result then
+			state = FOLLOW
+		end
+>>>>>>> parent of 40b1855... Stuck in tower bug correction
 	end
 end
 --FIM DA AREA DE CLASSES
