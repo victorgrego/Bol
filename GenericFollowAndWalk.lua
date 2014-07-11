@@ -1,4 +1,4 @@
-local version = "1.1"
+local version = "1.11"
 --[[
     Passive Follow by VictorGrego.
 ]]
@@ -106,7 +106,7 @@ function Action:run()
 	--PrintChat(self.action)
 	
 	actions["startTime"] = function()
-		if GetGameTimer() > SCRIPT_START_TIME then return true
+		if os.clock() > SCRIPT_START_TIME then return true
 		else return false end
 	end
 	
@@ -346,19 +346,19 @@ function mountBehaviorTree()
 	selector2 = Selector:new()
 	selector3 = Selector:new()
 	
-	startTime 	= Action:new{action = "startTime"}
-	noPartner 	= Action:new{action = "noPartner"}
-	partnerAfk 	= Action:new{action = "partnerAfk"}
+	startTime 		= Action:new{action = "startTime"}
+	noPartner 		= Action:new{action = "noPartner"}
+	partnerAfk 		= Action:new{action = "partnerAfk"}
 	matchPartner 	= Action:new{action = "matchPartner"}
 	partnerAlive 	= Action:new{action = "partnerAlive"}
 	partnerDead 	= Action:new{action = "partnerDead"}
-	inTurret 	= Action:new{action = "inTurret"}
-	recall 		= Action:new{action = "recall"}
+	inTurret 		= Action:new{action = "inTurret"}
+	recall 			= Action:new{action = "recall"}
 	partnerClose 	= Action:new{action = "partnerClose"}
 	followPartner 	= Action:new{action = "followPartner"}
-	goTurret 	= Action:new{action = "goTurret"}
+	goTurret 		= Action:new{action = "goTurret"}
 	partnerRecalling= Action:new{action = "partnerRecalling"}
-	friendClose	= Action:new{action = "friendClose"}
+	friendClose		= Action:new{action = "friendClose"}
 	followFriend 	= Action:new{action = "followFriend"}
 	towerFocusPlayer= Action:new{action = "towerFocusPlayer"}
 	runFromTower	= Action:new{action = "runFromTower"}
@@ -407,7 +407,7 @@ function OnDeleteObj(object)
 	if object.name:find("yikes") then
 		FocusOfTower = false
 	elseif object.name:find("TeleportHome") and GetDistance(partner, object) < 70 then
-		DelayAction(function() pRecalling = false end,10)
+		DelayAction(function() pRecalling = false end, 1, {0})
 	end
 end
 
@@ -467,7 +467,7 @@ function initVariables()
 	DEFAULT_MANA_THRESHOLD = 66
 
 	AFK_MAXTIME = 120
-	SCRIPT_START_TIME = 60
+	SCRIPT_START_TIME = os.clock() + 60
 	lastPartnerMove = GetTickCount()
 	
 	-- GLOBALS
