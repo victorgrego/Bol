@@ -1,5 +1,9 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 local version = "1.1"
+=======
+local version = "1.08"
+>>>>>>> parent of 40b1855... Stuck in tower bug correction
 =======
 local version = "1.08"
 >>>>>>> parent of 40b1855... Stuck in tower bug correction
@@ -482,6 +486,9 @@ function Brain()
 		if not result then
 			state = FOLLOW
 		end
+<<<<<<< HEAD
+>>>>>>> parent of 40b1855... Stuck in tower bug correction
+=======
 >>>>>>> parent of 40b1855... Stuck in tower bug correction
 	end
 end
