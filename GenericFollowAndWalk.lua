@@ -1,17 +1,7 @@
-local version = "1.09"
+local version = "1.1"
 --[[
-    Freely based in Passive Follow by ivan[russia]
-	Code improvements and bug correction and latest updates by VictorGrego.
-	
-	Changes:
-	- The recall when near a tower issue has been resolved
-	- Recalls after tower, for best safety
-	- Have a menu for dinamic adjust the distance
-	- Now follow partner recall
+	GenericFollowAndWalk is a Behavior Tree Script mantained by VictorGrego
 ]]
-finishedOnLoad = false
-initiated = false
-
 --UPDATE SETTINGS
 local AutoUpdate = true
 local SELF = SCRIPT_PATH..GetCurrentEnv().FILE_NAME
@@ -53,84 +43,306 @@ function UpdateCallback()
 		end
 	end
 end
-
---starting Variables
-function initVariables()
-	--summoners
-	DEFAULT_FOLLOW_DISTANCE = 400
-	DEFAULT_MANA_REGEN = 80
-	DEFAULT_HP_REGEN = 80
-
-	--CONSTANTS
-
-	SetupFollowAlly = true 	-- you start follow near ally when your followtarget have been died
-	SetupRunAway = true 	-- if no ally was near when followtarget died, you run to close tower
-	MIN_DISTANCE = 275
-	FOLLOW_LIMIAR = 500
-	HEAL_DISTANCE = 700
-	DEFAULT_HEALTH_THRESHOLD = 70
-	DEFAULT_MANA_THRESHOLD = 66
-	HL_slot = nil
-	CL_slot = nil
-
-	SetupToggleKey = 115 --Key to Toggle script. [ F4 - 115 ] default
-
-
-	SetupToggleKeyText = "F4"
-
-	AFK_MAXTIME = 120
-	INIT_CHOOSE_TIME = 60
-	INIT_GAME_TIME = nil
-	wanderPoint = nil
-	lastWander = GetTickCount()
-	
-	moveDelay = 333
-	lastMove = GetTickCount()
-	
-	-- GLOBALS
-
-	SetupDebug = true
-	following = nil
-	temp_following = nil
-	stopPosition = false
-	partnerAfk = true
-	havePartner = false
-
-	--state of app enum
-	FOLLOW = 1
-	TEMP_FOLLOW = "TEMPORARY_FOLLOWING"
-	SEARCHING_PARTNER = "SEARCHING_PARTNER"
-	GO_TOWER = "GOING_TO_TOWER"
-	RECALLING = "RECALLING"
-	AVOID_TOWER = "AVOIDING_TOWER"
-	WAITING_RESSURECT = "WAITING_RESSURECT"
-
-	--by default
-	state = SEARCHING_PARTNER
-
-	-- spawn
-	allySpawn = nil
-	enemySpawn = nil
-
-	--player status
-	isRegen = false
-	manaRegenPercent = 0.8
-	healthRegenPercent = 0.8
-
-	--follow menu
-	SetupDrawX = 0.1
-	SetupDrawY = 0.15
-	MenuTextSize = 18
-
-	allies = {}
-	FollowKeysText = {"F5", "F6", "F7", "F8"} --Key names for menu
-	FollowKeysCodes = {116,117,118,119} --Decimal key codes corressponding to key names
-	initiated = true
-	focusing = nil
-	lastFocused = nil
+root = nil
+--Task Class
+Task = {}
+function Task:new(o)
+	o = o or {}   -- create object if user does not provide one
+	setmetatable(o, self)
+	self.__index = self
+	return o
 end
 
---return players table
+function Task:run()
+	PrintChat("CHAMOU TASK RUN")
+end
+
+function Task:addChild(value)
+	table.insert(self,value)
+end
+
+function Task:addAll(value)
+	for i = 1, #value, 1 do
+		table.insert(self, value[i])
+	end
+end
+
+function Task:printAll()
+	for i = 1, #self, 1 do
+		PrintChat("Value: "..self[i])
+	end
+end
+
+-- Selector Class
+Selector = Task:new()
+
+function Selector:run()
+	for i, v in ipairs(self) do
+		if v:run() then return true end
+	end
+	return false
+end
+
+--Sequence Class
+Sequence = Task:new()
+
+function Sequence:run()
+	for i, v in ipairs(self) do
+		if not v:run() then return false end
+	end
+	return true
+end
+
+--Action Class
+Action = Task:new()
+
+function Action:run()
+	local actions = {}
+	
+	actions["startTime"] = function()
+		if GetGameTimer() > SCRIPT_START_TIME then return true
+		else return false end
+	end
+	
+	actions["noPartner"] = function()
+		if partner == nil then return true
+		else return false
+		end
+	end
+	
+	actions["partnerAfk"] = function()
+		checkAfk()
+		return pAfk
+	end
+	
+	actions["partnerAlive"] = function()
+		if not partner.dead then return true
+		else return false
+		end
+	end
+	
+	actions["partnerDead"] = function()
+		if partner.dead then return true
+		else return false
+		end
+	end
+	
+	actions["partnerClose"] = function()
+		if player:GetDistance(partner) <= config.followChamp.followDist then return true
+		else return false
+		end
+	end
+	
+	--TODO: Implements
+	actions["followFriend"] = function()
+		
+	end
+	
+	actions["friendClose"] = function()
+		local friends = GetPlayers(player.team, false, false)
+		local closest = friends[1]
+		for i = 1, #friends, 1 do
+			if player:GetDistance(friends[i]) < player:GetDistance(closest) then closest = friends[i] end
+		end
+		
+		if player:GetDistance(closest) <= config.followChamp.followDist then return true
+		else return false
+		end
+	end
+	
+	actions["inTurret"] = function()
+		local tower = GetCloseTower(player, player.team)
+		if player:GetDistance(tower) <= config.followChamp.followDist and player:GetDistance(GetSpawnPos()) < GetDistance(GetSpawnPos(), tower) then return true
+		else return false
+		end
+	end
+	
+	actions["matchPartner"] = function()
+		if partner == nil then
+			local bottomPoint = Vector(12143, 2190)
+			local myCarry = GetPlayers(player.team, false, false)
+			partner = myCarry[1]
+		
+			for i = 2, #myCarry, 1 do
+				if GetDistance(bottomPoint,myCarry[i]) < GetDistance(bottomPoint,partner) and myCarry[i]:GetDistance(allySpawn) > 5000 then
+					partner = myCarry[i]		
+				end
+			end
+			
+			PrintChat("myPartner: "..partner.name)
+			pAfk = false
+			return true
+		else
+			return false
+		end
+	end
+	
+	actions["partnerRecalling"] = function()
+		return pRecalling
+	end
+	
+	actions["isRecalling"] = function()
+		for i=1, objManager.maxObjects, 1 do
+			local obj = objManager:getObject(i)
+			if obj ~= nil and obj.valid and obj.name:find("TeleportHome") ~= nil and player:GetDistance(obj) < 70 then
+				return true
+			end
+		end
+		return false
+	end
+	
+	actions["followPartner"] = function()
+		followX = ((allySpawn.x - partner.x)/(partner:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + partner.x + math.random(-((config.followChamp.followDist-300)/3),((config.followChamp.followDist-300)/3)))
+		followZ = ((allySpawn.z - partner.z)/(partner:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + partner.z + math.random(-((config.followChamp.followDist-300)/3),((config.followChamp.followDist-300)/3)))
+			
+		player:MoveTo(followX, followZ)
+		
+		return true
+	end
+	
+	actions["goTurret"] = function()
+		local target = GetCloseTower(player, player.team)
+		player:MoveTo(player.x - target.x, player.z - target.z)
+		return true
+	end
+	
+	actions["towerFocusPlayer"] = function()
+		return FocusOfTower
+	end
+	
+	actions["runFromTower"] = function()
+		local followX = (2 * myHero.x) - target.x
+		local followZ = (2 * myHero.z) - target.z
+		player:MoveTo(followX, followZ)
+		
+		return true
+	end
+	
+	actions["recall"] = function()
+		PrintChat("Recalling")
+		CastSpell(RECALL)
+		return true
+	end
+	
+	local result = actions[self.action]()
+	return result
+end
+
+function mountBehaviorTree()
+	--1st level
+	root = Sequence:new()
+	sequence1 = Sequence:new()
+	sequence2 = Sequence:new()
+	sequence3 = Sequence:new()
+	sequence4 = Sequence:new()
+	sequence5 = Sequence:new()
+	sequence6 = Sequence:new()
+	sequence7 = Sequence:new() -- Attacked by tower
+	
+	selector1 = Selector:new()
+	selector2 = Selector:new()
+	selector3 = Selector:new()
+	
+	startTime 		= Action:new{action = "startTime"}
+	noPartner 		= Action:new{action = "noPartner"}
+	partnerAfk 		= Action:new{action = "partnerAfk"}
+	matchPartner 	= Action:new{action = "matchPartner"}
+	partnerAlive 	= Action:new{action = "partnerAlive"}
+	partnerDead 	= Action:new{action = "partnerDead"}
+	inTurret 		= Action:new{action = "inTurret"}
+	recall 			= Action:new{action = "recall"}
+	partnerClose 	= Action:new{action = "partnerClose"}
+	followPartner 	= Action:new{action = "followPartner"}
+	goTurret 		= Action:new{action = "goTurret"}
+	partnerRecalling= Action:new{action = "partnerRecalling"}
+	friendClose		= Action:new{action = "friendClose"}
+	followFriend 	= Action:new{action = "followFriend"}
+	towerFocusPlayer= Action:new{action = "towerFocusPlayer"}
+	runFromTower	= Action:new{action = "runFromTower"}
+	
+	root:addChild(startTime)
+	root:addChild(selector1)
+	
+	selector1:addChild(sequence1)
+	selector1:addChild(sequence2)
+	selector1:addChild(sequence3)
+	selector1:addChild(sequence4)
+	selector1:addChild(sequence7)
+	
+	sequence1:addChild(noPartner)
+	sequence1:addChild(partnerAfk)
+	sequence1:addChild(matchPartner)
+	
+	sequence7:addChild(towerFocusPlayer)
+	sequence7:addChild(runFromTower)
+	
+	sequence2:addChild(partnerAlive)
+	sequence2:addChild(selector2)
+	
+	sequence3:addChild(partnerDead)
+	sequence3:addChild(selector3)
+	
+	sequence4:addChild(inTurret)
+	sequence4:addChild(recall)
+	
+	selector2:addChild(sequence5)
+	selector2:addChild(partnerClose)
+	selector2:addChild(followPartner)
+	
+	selector3:addChild(sequence6)
+	selector3:addChild(goTurret)
+	
+	sequence5:addChild(partnerRecalling)
+	sequence5:addChild(partnerClose)
+	sequence5:addChild(recall)
+	
+	sequence6:addChild(friendClose)
+	sequence6:addChild(followFriend)
+end
+
+--Util Section
+function detectSpawnPoints()
+	for i=1, objManager.maxObjects, 1 do
+		local candidate = objManager:getObject(i)
+		if candidate ~= nil and candidate.valid and candidate.type == "obj_SpawnPoint" then 
+			if candidate.x < 3000 then 
+				if player.team == TEAM_BLUE then allySpawn = candidate else enemySpawn = candidate end
+			else 
+				if player.team == TEAM_BLUE then enemySpawn = candidate else allySpawn = candidate end
+			end
+		end
+	end
+end
+
+--return towers table
+function GetTowers(team)
+	local towers = {}
+	for i=1, objManager.maxObjects, 1 do
+		local tower = objManager:getObject(i)
+		if tower ~= nil and tower.valid and tower.type == "obj_AI_Turret" and tower.visible and tower.team == team then
+			table.insert(towers,tower)
+		end
+	end
+	if #towers > 0 then
+		return towers
+	else
+		return false
+	end
+end
+
+function GetCloseTower(hero, team)
+	local towers = GetTowers(team)
+	if #towers > 0 then
+		local candidate = towers[1]
+		for i=2, #towers, 1 do
+			if (towers[i].health/towers[i].maxHealth > 0.1) and  hero:GetDistance(candidate) > hero:GetDistance(towers[i]) then candidate = towers[i] end
+		end
+		return candidate
+	else
+		return false
+	end
+end
+
 function GetPlayers(team, includeDead, includeSelf)
 	local players = {}
 	local result = {}
@@ -161,164 +373,56 @@ function GetPlayers(team, includeDead, includeSelf)
 	return result
 end
 
---return towers table
-function GetTowers(team)
-	local towers = {}
-	for i=1, objManager.maxObjects, 1 do
-		local tower = objManager:getObject(i)
-		if tower ~= nil and tower.valid and tower.type == "obj_AI_Turret" and tower.visible and tower.team == team then
-			table.insert(towers,tower)
+function checkAfk()
+	if partner ~= nil and collectTimer then
+		if partner:GetDistance(allySpawn) < 5000 then
+			lastPartnerMove = GetGameTimer()
+			collectTimer = false
 		end
 	end
-	if #towers > 0 then
-		return towers
-	else
-		return false
-	end
-end
-
---here get close tower
-function GetCloseTower(hero, team)
-	local towers = GetTowers(team)
-	if #towers > 0 then
-		local candidate = towers[1]
-		for i=2, #towers, 1 do
-			if (towers[i].health/towers[i].maxHealth > 0.1) and  hero:GetDistance(candidate) > hero:GetDistance(towers[i]) then candidate = towers[i] end
-		end
-		return candidate
-	else
-		return false
-	end
-end
-
---here get close player
-function GetClosePlayer(hero, team)
-	local players = GetPlayers(team,false,false)
-	if #players > 0 then
-		local candidate = players[1]
-		for i=2, #players, 1 do
-			if hero:GetDistance(candidate) > hero:GetDistance(players[i]) then candidate = players[i] end
-		end
-		return candidate
-	else
-		return false
-	end
-end
-
--- SEMICORE
--- run(follow) to target
-function Run(target)
-	if target.type == "AIHeroClient" then
-		if target.dead then return false end
-		if target.dead and InFountain() then return true end
-		if target:GetDistance(allySpawn) > config.followChamp.followDist then
-			if (player:GetDistance(target) > config.followChamp.followDist + FOLLOW_LIMIAR or player:GetDistance(target) < MIN_DISTANCE or player:GetDistance(allySpawn) + MIN_DISTANCE > target:GetDistance(allySpawn)) then
-				followX = ((allySpawn.x - target.x)/(target:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + target.x + math.random(-((config.followChamp.followDist-300)/3),((config.followChamp.followDist-300)/3)))
-				followZ = ((allySpawn.z - target.z)/(target:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + target.z + math.random(-((config.followChamp.followDist-300)/3),((config.followChamp.followDist-300)/3)))
-				
-				iMove(followX, followZ)
-				wander(target)
-			else
-				if (wanderPoint == nil or (player.x == wanderPoint.x and player.z == wanderPoint.z)) then
-					wander(target)
-				else
-					iMove(wanderPoint.x, wanderPoint.z)
-				end
-			end
-		end
-		return true
-	elseif target.type == "obj_AI_Turret" and target.team == player.team then 
-		if player:GetDistance(target) > 200 then 
-			followX = ((allySpawn.x - target.x)/(target:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + target.x)
-			followZ = ((allySpawn.z - target.z)/(target:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + target.z)
-			player:MoveTo(math.floor(followX), math.floor(followZ))
-			return true
-		else
-			return false
-		end
-	elseif target.type == "obj_AI_Turret" and target.team ~= player.team then 
-		if (UnderTurret(player, true)) then
-			
-			local followX = (2 * myHero.x) - target.x
-			local followZ = (2 * myHero.z) - target.z
-			
-			player:MoveTo(followX, followZ)
-			return true
-		else
-			return false
-		end
-	end
-end
-
-function wander(center)
-	local v1 = Vector(center.x + math.floor(math.random(-FOLLOW_LIMIAR,FOLLOW_LIMIAR)), center.z + math.floor(math.random(-FOLLOW_LIMIAR, FOLLOW_LIMIAR)))
-	local v2 = Vector(center)
-	local aux = Vector(center)
-	--local angle = aux:angleBetween(v1,v2)
-	local radius = math.floor(math.random(MIN_DISTANCE, FOLLOW_LIMIAR))
-	local angle = math.floor(math.random(1,360))
 	
-	local followX = center.x + radius * math.cos(math.rad(angle))
-	local followY = center.y + radius * math.sin(math.rad(angle))
-	local followZ = center.z + radius * math.sin(math.rad(angle))
-	
-	wanderPoint = {x = followX, y = followY, z = followZ}
-	lastWander = GetTickCount()
-end
-
-function iMove(x,z)
-	if GetTickCount() < lastMove + moveDelay then return end
-	
-	if player.x ~= x and player.z ~= z then player:MoveTo(x, z)
-	else wander(following) end
-	lastMove = GetTickCount()
-end
-
--- CORE
-function Brain()
-	--if following ~= nil and not player.dead then 
-	if state == RECALLING then 
-		if InFountain() then state = WAITING_RESSURECT
-		else CastSpell(RECALL) end
-		return false
-	elseif state == FOLLOW then
-		--[[if focusing ~= nil and focusing.type == "obj_AI_Turret" and focusing.team ~= player.team then 
-			player:Attack(focusing) 
-		end]]
-		if player.dead then return false end
-		local result = Run(following)
-		if not result then
-			local closest = GetClosePlayer(myHero, player.team)
-			if closest and myHero:GetDistance(closest) < 750 then
-				temp_following = closest
-				state = TEMP_FOLLOW
-			else
-				state = GO_TOWER
-			end
+	if partner ~= nil and not collectTimer then
+		if GetGameTimer() >= afkTimerCount + AFK_MAXTIME then
+			pAfk = true
+		elseif following:GetDistance(allySpawn) > 5000 then
+			collectTimer = true
+			pAfk = false
 		end
-	elseif state == TEMP_FOLLOW then 
-		if following.dead then Run(temp_following)
-		else state = FOLLOW end
-	elseif state == GO_TOWER then 
-		local result = Run(GetCloseTower(player,player.team)) 
-		if not result then
-			state = RECALLING
-		end
-	elseif state == SEARCHING_PARTNER then 
-		if SearchingPartner() then state = FOLLOW end
-	elseif state == AVOID_TOWER then
-		local result = Run(GetCloseTower(player,TEAM_ENEMY)) 
-		if not result then
-			state = FOLLOW
-		end
-	elseif start == WAITING_RESSURECT then
-		if not following.dead then state = FOLLOW end
 	end
-	return true
-	--end
 end
 
---Drawing Script Menu
+--End Util Section
+
+
+
+function OnDeleteObj(object)
+	if object.name:find("yikes") then
+		FocusOfTower = false
+	elseif object.name:find("TeleportHome") and GetDistance(partner, object) < 70 then
+		DelayAction(function() pRecalling = false end,10)
+	end
+end
+
+function OnCreateObj(object)
+	if object.name:find("yikes") then
+		FocusOfTower = true
+	elseif object.name:find("TeleportHome") and GetDistance(partner, object) < 70 then
+		pRecalling = true
+	end
+end
+
+function OnDraw()
+	if partner ~= nil then DrawCircle(partner.x, partner.y, partner.z, 70, ARGB(200,255,255,0)) end
+	if config.followChamp.drawFollowDist then DrawCircle(myHero.x, myHero.y, myHero.z, config.followChamp.followDist, ARGB(200,1,33,0)) end
+end
+
+function OnTick()
+	if(config.enableScript)then
+		root:run()
+	end
+end
+--FIM DA AREA DE CLASSES
+
 function drawMenu()
 	config = scriptConfig("Passive Follow", "Passive Follow") 
 
@@ -342,208 +446,43 @@ function drawMenu()
 	config.followChamp:addParam("drawFollowDist", "Draw Distance of Follow", SCRIPT_PARAM_ONOFF, true)
 end
 
---TODO: Support other Spells
---Set Heal and Clarity
-function setSummonerSlots()
-	--set clarity
-	if player:GetSpellData(SUMMONER_1).name == "SummonerMana" then
-		CL_slot = SUMMONER_1
-		HL_slot = SUMMONER_2
-	elseif player:GetSpellData(SUMMONER_2).name == "SummonerMana" then
-		HL_slot = SUMMONER_1
-		CL_slot = SUMMONER_2
-	end
-end
+function initVariables()
+	--summoners
+	DEFAULT_FOLLOW_DISTANCE = 400
+	DEFAULT_MANA_REGEN = 80
+	DEFAULT_HP_REGEN = 80
 
-function detectSpawnPoints()
-	for i=1, objManager.maxObjects, 1 do
-		local candidate = objManager:getObject(i)
-		if candidate ~= nil and candidate.valid and candidate.type == "obj_SpawnPoint" then 
-			if candidate.x < 3000 then 
-				if player.team == TEAM_BLUE then allySpawn = candidate else enemySpawn = candidate end
-			else 
-				if player.team == TEAM_BLUE then enemySpawn = candidate else allySpawn = candidate end
-			end
-		end
-	end
-end
+	--CONSTANTS
+	MIN_DISTANCE = 275
+	HEAL_DISTANCE = 700
+	DEFAULT_HEALTH_THRESHOLD = 70
+	DEFAULT_MANA_THRESHOLD = 66
 
--- Auto Called Methods
-
-function OnProcessSpell(unit,spell)
-	if not finishedOnLoad then return end
+	AFK_MAXTIME = 120
+	SCRIPT_START_TIME = 60
+	lastPartnerMove = GetTickCount()
 	
-	if spell.name:lower():find("attack")~=nil and unit.name == following.name and spell.target.type:lower():find("turret") ~= nil then
-		--PrintChat("Spell Created: "..spell.target.type)
-		focusing = spell.target
-	end
-end
+	-- GLOBALS
+	FocusOfTower = false
+	partner = nil
+	temp_partner = nil
+	pAfk = true
+	pRecalling = false -- is Partner Recalling?
 
--- turn (off - on) by SetupToggleKey
--- follow summoners via follow menu
-function OnWndMsg(msg, keycode)
-	for i=1, #allies, 1 do 
-		if keycode == FollowKeysCodes[i] and msg == KEY_DOWN then
-			following = allies[i]
-			PrintChat("Passive Follow >> following summoner: "..allies[i].name)
-			state = FOLLOW
-		end
-	end
-end
+	-- spawn
+	allySpawn = nil
+	enemySpawn = nil
 
--- Drawing follow menu
-function OnDraw()
-	local tempSetupDrawY = SetupDrawY
-	--DrawCircle(12143, 0, 2190, 200, ARGB(255,255,0,0))
-	--if wanderPoint~= nil then DrawLine3D(player.x, player.y, player.z, wanderPoint.x, wanderPoint.y, wanderPoint.z, 1, ARGB(255,255,255,255)) end
-	
-	DrawText("Press "..SetupToggleKeyText.." to toggle passive follow script.", MenuTextSize , (WINDOW_W - WINDOW_X) * SetupDrawX, (WINDOW_H - WINDOW_Y) * tempSetupDrawY , 0xffffff00) 
-	tempSetupDrawY = tempSetupDrawY + 0.03
-	
-	if config.followChamp.drawFollowDist then DrawCircle(myHero.x, myHero.y, myHero.z, config.followChamp.followDist, ARGB(200,1,33,0)) end
-	
-	for i=1, #allies, 1 do
-		DrawText("Press "..FollowKeysText[i].." to follow player: "..allies[i].name.." ("..allies[i].charName..")", MenuTextSize , (WINDOW_W - WINDOW_X) * SetupDrawX, (WINDOW_H - WINDOW_Y) * tempSetupDrawY , 0xffffff00) 
-		tempSetupDrawY = tempSetupDrawY + 0.03
-	end
-end
-
--- OnDeleteObj
-function OnDeleteObj(obj)
-	if obj.name:find("TeleportHome") ~= nil then
-		if (GetDistance(following, obj) < 70 and player:GetDistance(following) <= config.followChamp.followDist+ FOLLOW_LIMIAR) or player:GetDistance(obj) < 70 then
-			DelayAction(function() player:MoveTo(player.x, player.z)
-			state = FOLLOW end,0.5)
-		end
-	end
-end
-
---Detects if my partner is Recalling
-function OnCreateObj(object)
-	if object.name:find("TeleportHome") ~= nil  then
-		if GetDistance(following, object) < 70 and player:GetDistance(following) <= config.followChamp.followDist + FOLLOW_LIMIAR then
-			state = RECALLING
-			CastSpell(RECALL)
-		elseif GetDistance(player, object) < 70 then
-			state = RECALLING
-			CastSpell(RECALL)
-		end
-	elseif object.name:find("yikes") then
-		state = AVOID_TOWER
-	end
-end
-
-function SearchingPartner()
-	if(GetGameTimer() < INIT_CHOOSE_TIME + INIT_GAME_TIME) then return end
-	local bottomPoint = Vector(12143, 2190)
-	local myCarry = GetPlayers(player.team, false, false)
-	following = myCarry[1]
-	havePartner = true
-	partnerAfk = false
-	
-	for i = 2, #myCarry, 1 do
-		if GetDistance(bottomPoint,myCarry[i]) < GetDistance(bottomPoint,following) then
-			following = myCarry[i]		
-		end
-	end
-	
-	PrintChat("Passive Follow >> following summoner: "..following.name)
-	return true
-end
-
-function useSummonerSpell()
-	-- use Heal if you hp is low (currently buggy)
-	if (following ~= nil and following.dead == false and (following.health/following.maxHealth) * 100 < config.autoSpells.healthThreshold and player:GetDistance(following) <= HEAL_DISTANCE) or (player.health/player.maxHealth) * 100 < config.autoSpells.healthThreshold then
-		if HL_slot ~= nil and player:CanUseSpell(HL_slot) == READY then
-			PrintChat("Passive Follow >> Used summoner spell.")
-			CastSpell(HL_slot)
-		end
-	end
-		
-	-- use Clarity if your mana is low 
-	if (player.mana/player.maxMana) * 100 < config.autoSpells.manaThreshold then
-		if CL_slot ~= nil and player:CanUseSpell(CL_slot) == READY then
-			PrintChat("Passive Follow >> Used summoner spell: CLARITY.")
-			CastSpell(CL_slot)
-		end
-	end
-end 
-
-function followAnyAfterTime()
-	-- If noone after bot, then follow any!
-	--if carryCheck then PrintChat("carryCheck") else PrintChat("noCarryCheck") end
-	--if partnerAfk then PrintChat("partnerAfk") else PrintChat("noPartnerAfk") end
-	if not havePartner and partnerAfk then
-		local toFollow = GetPlayers(player.team, true, false)
-		for i = 1, #toFollow, 1 do --get heros
-			if toFollow[i]:GetDistance(allySpawn) > 5000 then 
-				following = toFollow[i]
-				PrintChat("Passive Follow >> following summoner: "..toFollow[i].name)
-				state = FOLLOW
-				havePartner = true
-				afkTimerCount = GetGameTimer()
-			end
-		end
-	end
-end
-
-function checkPartnerAfk()
-	-- Check if target is at base, and activate a timer.
-	if havePartner and not partnerAfk then
-		if following:GetDistance(allySpawn) < 5000 then
-			afkTimerCount = GetGameTimer()
-			partnerAfk = true
-		end
-	end
-
-	-- If tolerance time finished, search for new partner, else continue following previous.
-	if havePartner and partnerAfk then
-		if GetGameTimer() >= afkTimerCount + AFK_MAXTIME then
-			havePartner = false
-			followAnyAfterTime()
-		elseif following:GetDistance(allySpawn) > 5000 then
-			partnerAfk = false
-		end
-	end
-	
-	if not havePartner and partnerAfk and GetGameTimer() >= afkTimerCount + AFK_MAXTIME then
-		followAnyAfterTime()
-	end
+	detectSpawnPoints()
 end
 
 
-function OnTick()
-	if not finishedOnLoad or not config.enableScript then return end
-	-- if in fountain and has no mana/hp, wait to fill up mana/hp bar before heading back out
-	if InFountain() and (player.mana/player.maxMana * 100 < config.fontRegen.manaRegen or player.health/player.maxHealth * 100 < config.fontRegen.hpRegen) then
-		PrintChat("Passive Follow >> Waiting at fountain to replenish mana and health.")
-		player:HoldPosition()
-	else
-		isRegen = false
-		
-		if not Brain() then return end
-		checkPartnerAfk()
-		useSummonerSpell()
-	end
-end
-
--- AT LOADING OF SCRIPT
 function OnLoad()
-	
 	player = GetMyHero()
 	initVariables()
-	afkTimerCount = GetGameTimer()   --start timer
-	INIT_GAME_TIME = GetGameTimer()
-	PrintChat("Passive Follow >> LOADED")
-	
-	setSummonerSlots()
-	detectSpawnPoints()
-	
-	--set allies player list
-	allies = GetPlayers(player.team, true, false)
 	drawMenu()
-	finishedOnLoad = true
-	
+	mountBehaviorTree()
+	PrintChat("Behavior Tree")
 	if AutoUpdate then
 		Update()
 	end
