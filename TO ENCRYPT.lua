@@ -184,7 +184,7 @@ function Action:run()
 	return result
 end
 
-function mountBehaviorTree()
+_G.mountBehaviorTree = function()
 	--1st level
 	root = Sequence:new()
 	sequence1 = Sequence:new()
