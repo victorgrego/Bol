@@ -1,4 +1,4 @@
-local version = "1.12"
+local version = "1.121"
 --[[
     Passive Follow by VictorGrego.
 ]]
@@ -497,7 +497,7 @@ function initVariables()
 	DEFAULT_MANA_THRESHOLD = 66
 
 	AFK_MAXTIME = 120
-	SCRIPT_START_TIME = os.clock() --+ 60 -- change the adc selecting time
+	SCRIPT_START_TIME = os.clock() + 60 -- change the adc selecting time
 	lastPartnerMove = GetTickCount()
 	
 	FocusOfTower = false
