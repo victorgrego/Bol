@@ -1,4 +1,4 @@
-local version = "1.11"
+local version = "1.12"
 --[[
     Passive Follow by VictorGrego.
 ]]
@@ -10,7 +10,7 @@ local AutoUpdate = true
 local SELF = SCRIPT_PATH..GetCurrentEnv().FILE_NAME
 local URL = "https://raw.githubusercontent.com/victorgrego/BolSorakaScripts/master/GenericFollowAndWalk.lua?"..math.random(100)
 local UPDATE_TMP_FILE = LIB_PATH.."GFWTmp.txt"
-local versionmessage = "<font color=\"#81BEF7\" >Changelog: Corrected a bug where soraka would stuck in font/towers</font>"
+local versionmessage = "<font color=\"#81BEF7\" >Changelog: Corrected recall bug!!!</font>"
 
 function Update()
 	DownloadFile(URL, UPDATE_TMP_FILE, UpdateCallback)
@@ -209,7 +209,10 @@ function Action:run()
 	
 	actions["goTurret"] = function()
 		local target = GetCloseTower(player, player.team)
-		player:MoveTo(player.x - target.x, player.z - target.z)
+		followX = ((allySpawn.x - target.x)/(target:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + target.x)
+		followZ = ((allySpawn.z - target.z)/(target:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + target.z)
+		player:MoveTo(math.floor(followX), math.floor(followZ))
+			
 		return true
 	end
 	
@@ -226,7 +229,7 @@ function Action:run()
 	end
 	
 	actions["recall"] = function()
-		PrintChat("Recalling")
+		--PrintChat("Recalling")
 		CastSpell(RECALL)
 		return true
 	end
@@ -396,18 +399,44 @@ function mountBehaviorTree()
 	selector3:addChild(goTurret)
 	
 	sequence5:addChild(partnerRecalling)
-	sequence5:addChild(partnerClose)
+	--sequence5:addChild(partnerClose)
 	sequence5:addChild(recall)
 	
 	sequence6:addChild(friendClose)
 	sequence6:addChild(followFriend)
 end
 
+function OnRecall(hero, channelTimeInMs)
+    if hero.isMe then
+        meRecalling = true
+	elseif hero.name == partner.name then
+		pRecalling = true
+    end
+end
+
+function OnAbortRecall(hero)
+    if hero.isMe then
+        meRecalling = false
+	elseif hero.name == partner.name then
+		pRecalling = false
+    end        
+end
+
+function OnFinishRecall(hero)
+    if hero.isMe then
+        meRecalling = false
+	elseif hero.name == partner.name then
+		pRecalling = false
+    end
+end
+
 function OnDeleteObj(object)
 	if object.name:find("yikes") then
 		FocusOfTower = false
 	elseif object.name:find("TeleportHome") and GetDistance(partner, object) < 70 then
-		DelayAction(function() pRecalling = false end, 1, {0})
+		DelayAction(function() 
+		pRecalling = false 
+		end, 0.5, {0})
 	end
 end
 
@@ -425,6 +454,7 @@ function OnDraw()
 end
 
 function OnTick()
+	
 	if(config.enableScript)then
 		root:run()
 	end
@@ -467,15 +497,15 @@ function initVariables()
 	DEFAULT_MANA_THRESHOLD = 66
 
 	AFK_MAXTIME = 120
-	SCRIPT_START_TIME = os.clock() + 60
+	SCRIPT_START_TIME = os.clock() --+ 60 -- change the adc selecting time
 	lastPartnerMove = GetTickCount()
 	
-	-- GLOBALS
 	FocusOfTower = false
 	partner = nil
 	temp_partner = nil
 	pAfk = true
 	pRecalling = false -- is Partner Recalling?
+	meRecalling = false
 
 	-- spawn
 	allySpawn = nil
