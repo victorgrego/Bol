@@ -1,4 +1,4 @@
-local version = "1.13"
+local version = "1.131"
 --[[
     Passive Follow by VictorGrego.
 ]]
@@ -483,10 +483,6 @@ function OnDraw()
 end
 
 function OnTick()
-	if lastPartnerMove ~= nil then print("Last Move: "..lastPartnerMove) end
-	print("CurrentTime: "..tostring(os.clock()))
-	--if pAfk then print("pAfk True") else then print("pAfk False") end]]
-	if partner ~= nil then PrintChat("myPartner: "..partner.name) end
 	if(config.enableScript)then
 		root:run()
 	end
