@@ -1,4 +1,4 @@
-local version = "1.122"
+local version = "1.13"
 --[[
     Passive Follow by VictorGrego.
 ]]
@@ -10,7 +10,7 @@ local AutoUpdate = true
 local SELF = SCRIPT_PATH..GetCurrentEnv().FILE_NAME
 local URL = "https://raw.githubusercontent.com/victorgrego/BolSorakaScripts/master/GenericFollowAndWalk.lua?"..math.random(100)
 local UPDATE_TMP_FILE = LIB_PATH.."GFWTmp.txt"
-local versionmessage = "<font color=\"#81BEF7\" >Changelog: Corrected recall bug!!!</font>"
+local versionmessage = "<font color=\"#81BEF7\" >Changelog: Shooose partner after afk 120s </font>"
 
 function Update()
 	DownloadFile(URL, UPDATE_TMP_FILE, UpdateCallback)
@@ -119,17 +119,18 @@ function Action:run()
 	
 	actions["partnerAfk"] = function()
 		checkAfk()
+		if pAfk then partner = nil end
 		return pAfk
 	end
 	
 	actions["partnerAlive"] = function()
-		if not partner.dead then return true
+		if partner ~= nil and not partner.dead then return true
 		else return false
 		end
 	end
 	
 	actions["partnerDead"] = function()
-		if partner.dead then return true
+		if partner ~= nil and  partner.dead then return true
 		else return false
 		end
 	end
@@ -190,6 +191,7 @@ function Action:run()
 			if partner ~= nil then
 				PrintChat("myPartner: "..partner.name)
 				pAfk = false
+				lastPartnerMove = os.clock()
 				return true
 			else
 				return false
@@ -330,20 +332,13 @@ function GetPlayers(team, includeDead, includeSelf)
 end
 
 function checkAfk()
-	if partner ~= nil and collectTimer then
-		if partner:GetDistance(allySpawn) < 5000 then
-			lastPartnerMove = GetGameTimer()
-			collectTimer = false
-		end
-	end
-	
-	if partner ~= nil and not collectTimer then
-		if GetGameTimer() >= afkTimerCount + AFK_MAXTIME then
+	if partner ~= nil and GetDistance(partner, allySpawn) < 3000 then
+		if os.clock() >= lastPartnerMove + AFK_MAXTIME then
 			pAfk = true
-		elseif following:GetDistance(allySpawn) > 5000 then
-			collectTimer = true
-			pAfk = false
 		end
+	elseif partner ~= nil then
+		lastPartnerMove = os.clock()
+		pAfk = false
 	end
 end
 
@@ -365,6 +360,7 @@ function mountBehaviorTree()
 	selector2 = Selector:new()
 	selector3 = Selector:new()
 	selector4 = Selector:new()
+	selector5 = Selector:new() -- partner afk
 	
 	startTime 		= Action:new{action = "startTime"}
 	noPartner 		= Action:new{action = "noPartner"}
@@ -395,8 +391,7 @@ function mountBehaviorTree()
 	selector1:addChild(sequence4)
 	
 	--lvl3
-	sequence1:addChild(noPartner)
-	sequence1:addChild(partnerAfk)
+	sequence1:addChild(selector5)
 	sequence1:addChild(matchPartner)
 	
 	sequence7:addChild(towerFocusPlayer)
@@ -412,6 +407,9 @@ function mountBehaviorTree()
 	sequence4:addChild(recall)
 	
 	--lvl 4
+	selector5:addChild(partnerAfk)
+	selector5:addChild(noPartner)
+	
 	selector2:addChild(sequence5)
 	selector2:addChild(partnerClose)
 	selector2:addChild(followPartner)
@@ -485,7 +483,10 @@ function OnDraw()
 end
 
 function OnTick()
-	
+	if lastPartnerMove ~= nil then print("Last Move: "..lastPartnerMove) end
+	print("CurrentTime: "..tostring(os.clock()))
+	--if pAfk then print("pAfk True") else then print("pAfk False") end]]
+	if partner ~= nil then PrintChat("myPartner: "..partner.name) end
 	if(config.enableScript)then
 		root:run()
 	end
@@ -531,7 +532,7 @@ function initVariables()
 
 	AFK_MAXTIME = 120
 	SCRIPT_START_TIME = os.clock() + 60 -- change the adc selecting time
-	lastPartnerMove = GetTickCount()
+	lastPartnerMove = nil
 	
 	FocusOfTower = false
 	partner = nil
@@ -540,6 +541,7 @@ function initVariables()
 	pRecalling = false -- is Partner Recalling?
 	meRecalling = false
 	yikesTurret = nil
+	collectTimer = true
 
 	-- spawn
 	allySpawn = nil
