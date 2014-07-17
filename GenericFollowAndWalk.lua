@@ -1,21 +1,16 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
-local version = "1.1"
-=======
-local version = "1.08"
->>>>>>> parent of 40b1855... Stuck in tower bug correction
-=======
-local version = "1.08"
->>>>>>> parent of 40b1855... Stuck in tower bug correction
+local version = "1.131"
 --[[
-	GenericFollowAndWalk is a Behavior Tree Script mantained by VictorGrego
+    Passive Follow by VictorGrego.
 ]]
+finishedOnLoad = false
+initiated = false
+
 --UPDATE SETTINGS
 local AutoUpdate = true
 local SELF = SCRIPT_PATH..GetCurrentEnv().FILE_NAME
 local URL = "https://raw.githubusercontent.com/victorgrego/BolSorakaScripts/master/GenericFollowAndWalk.lua?"..math.random(100)
 local UPDATE_TMP_FILE = LIB_PATH.."GFWTmp.txt"
-local versionmessage = "<font color=\"#81BEF7\" >Changelog: Corrected a bug where soraka would stuck in font/towers</font>"
+local versionmessage = "<font color=\"#81BEF7\" >Changelog: Shooose partner after afk 120s </font>"
 
 function Update()
 	DownloadFile(URL, UPDATE_TMP_FILE, UpdateCallback)
@@ -51,6 +46,8 @@ function UpdateCallback()
 		end
 	end
 end
+
+--Classes Area
 root = nil
 --Task Class
 Task = {}
@@ -84,32 +81,12 @@ end
 -- Selector Class
 Selector = Task:new()
 
-<<<<<<< HEAD
 function Selector:run()
 	for i, v in ipairs(self) do
 		if v:run() then return true end
 	end
 	return false
 end
-=======
-	SetupDebug = true
-	following = nil
-	temp_following = nil
-	stopPosition = false
-	partnerAfk = true
-	havePartner = false
-
-	--state of app enum
-	FOLLOW = 1
-	TEMP_FOLLOW = "TEMPORARY_FOLLOWING"
-	SEARCHING_PARTNER = "SEARCHING_PARTNER"
-	GO_TOWER = "GOING_TO_TOWER"
-	RECALLING = "RECALLING"
-	AVOID_TOWER = "AVOIDING_TOWER"
-
-	--by default
-	state = SEARCHING_PARTNER
->>>>>>> parent of 40b1855... Stuck in tower bug correction
 
 --Sequence Class
 Sequence = Task:new()
@@ -126,13 +103,15 @@ Action = Task:new()
 
 function Action:run()
 	local actions = {}
+	--PrintChat(self.action)
 	
 	actions["startTime"] = function()
-		if GetGameTimer() > SCRIPT_START_TIME then return true
+		if os.clock() > SCRIPT_START_TIME then return true
 		else return false end
 	end
 	
 	actions["noPartner"] = function()
+		--if(partner ~= nil) then PrintChat(partner.name) end
 		if partner == nil then return true
 		else return false
 		end
@@ -140,17 +119,18 @@ function Action:run()
 	
 	actions["partnerAfk"] = function()
 		checkAfk()
+		if pAfk then partner = nil end
 		return pAfk
 	end
 	
 	actions["partnerAlive"] = function()
-		if not partner.dead then return true
+		if partner ~= nil and not partner.dead then return true
 		else return false
 		end
 	end
 	
 	actions["partnerDead"] = function()
-		if partner.dead then return true
+		if partner ~= nil and  partner.dead then return true
 		else return false
 		end
 	end
@@ -170,36 +150,52 @@ function Action:run()
 		local friends = GetPlayers(player.team, false, false)
 		local closest = friends[1]
 		for i = 1, #friends, 1 do
-			if player:GetDistance(friends[i]) < player:GetDistance(closest) then closest = friends[i] end
+			if friends[i] ~= nil and player:GetDistance(friends[i]) < player:GetDistance(closest) then closest = friends[i] end
 		end
 		
-		if player:GetDistance(closest) <= config.followChamp.followDist then return true
+		if closest ~= nil and player:GetDistance(closest) <= config.followChamp.followDist then return true
 		else return false
 		end
 	end
 	
 	actions["inTurret"] = function()
-		local tower = GetCloseTower(player, player.team)
-		if player:GetDistance(tower) <= config.followChamp.followDist and player:GetDistance(GetSpawnPos()) < GetDistance(GetSpawnPos(), tower) then return true
+		local myTurret = GetCloseTower(player, player.team)
+		if player:GetDistance(myTurret) <= config.followChamp.followDist and player:GetDistance(allySpawn) < GetDistance(allySpawn, myTurret) then return true
 		else return false
 		end
 	end
 	
 	actions["matchPartner"] = function()
 		if partner == nil then
-			local bottomPoint = Vector(12143, 2190)
 			local myCarry = GetPlayers(player.team, false, false)
-			partner = myCarry[1]
+			local score = {}
+			local maxScore = -1
+			partner = nil
 		
-			for i = 2, #myCarry, 1 do
-				if GetDistance(bottomPoint,myCarry[i]) < GetDistance(bottomPoint,partner) and myCarry[i]:GetDistance(allySpawn) > 5000 then
-					partner = myCarry[i]		
+			for i = 1, #myCarry, 1 do
+				score[i] = 0
+				for j = 1, #myCarry, 1 do
+					if GetDistance(myCarry[i], bottomPoint) < GetDistance(myCarry[j], bottomPoint) then score[i] = score[i] + 1 end
+				end
+				if GetDistance(bottomPoint, myCarry[i]) < 6000 then score[i] = score[i] + 5 end
+				if GetDistance(allySpawn, myCarry[i]) < 5000 then score[i] = score[i] - 10000 end
+			end
+			
+			for k = 1, #myCarry, 1 do
+				if score[k] > maxScore and score[k] > 0 then
+					maxScore = score[k]
+					partner = myCarry[k]
 				end
 			end
 			
-			PrintChat("myPartner: "..partner.name)
-			pAfk = false
-			return true
+			if partner ~= nil then
+				PrintChat("myPartner: "..partner.name)
+				pAfk = false
+				lastPartnerMove = os.clock()
+				return true
+			else
+				return false
+			end
 		else
 			return false
 		end
@@ -229,8 +225,11 @@ function Action:run()
 	end
 	
 	actions["goTurret"] = function()
-		local target = GetCloseTower(player, player.team)
-		player:MoveTo(player.x - target.x, player.z - target.z)
+		local myTurret = GetCloseTower(player, player.team)
+		followX = (allySpawn.x - myTurret.x)/(myTurret:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + myTurret.x
+		followZ = (allySpawn.z - myTurret.z)/(myTurret:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + myTurret.z
+		player:MoveTo(math.floor(followX), math.floor(followZ))
+			
 		return true
 	end
 	
@@ -239,94 +238,25 @@ function Action:run()
 	end
 	
 	actions["runFromTower"] = function()
-		local followX = (2 * myHero.x) - target.x
-		local followZ = (2 * myHero.z) - target.z
+		local followX = (2 * myHero.x) - yikesTurret.x
+		local followZ = (2 * myHero.z) - yikesTurret.z
 		player:MoveTo(followX, followZ)
 		
 		return true
 	end
 	
 	actions["recall"] = function()
-		PrintChat("Recalling")
-		CastSpell(RECALL)
+		--PrintChat("Recalling")
+		if not InFountain() then CastSpell(RECALL) end
 		return true
 	end
 	
 	local result = actions[self.action]()
+	--if result then PrintChat("true") else PrintChat("false") end
 	return result
 end
 
-function mountBehaviorTree()
-	--1st level
-	root = Sequence:new()
-	sequence1 = Sequence:new()
-	sequence2 = Sequence:new()
-	sequence3 = Sequence:new()
-	sequence4 = Sequence:new()
-	sequence5 = Sequence:new()
-	sequence6 = Sequence:new()
-	sequence7 = Sequence:new() -- Attacked by tower
-	
-	selector1 = Selector:new()
-	selector2 = Selector:new()
-	selector3 = Selector:new()
-	
-	startTime 		= Action:new{action = "startTime"}
-	noPartner 		= Action:new{action = "noPartner"}
-	partnerAfk 		= Action:new{action = "partnerAfk"}
-	matchPartner 	= Action:new{action = "matchPartner"}
-	partnerAlive 	= Action:new{action = "partnerAlive"}
-	partnerDead 	= Action:new{action = "partnerDead"}
-	inTurret 		= Action:new{action = "inTurret"}
-	recall 			= Action:new{action = "recall"}
-	partnerClose 	= Action:new{action = "partnerClose"}
-	followPartner 	= Action:new{action = "followPartner"}
-	goTurret 		= Action:new{action = "goTurret"}
-	partnerRecalling= Action:new{action = "partnerRecalling"}
-	friendClose		= Action:new{action = "friendClose"}
-	followFriend 	= Action:new{action = "followFriend"}
-	towerFocusPlayer= Action:new{action = "towerFocusPlayer"}
-	runFromTower	= Action:new{action = "runFromTower"}
-	
-	root:addChild(startTime)
-	root:addChild(selector1)
-	
-	selector1:addChild(sequence1)
-	selector1:addChild(sequence2)
-	selector1:addChild(sequence3)
-	selector1:addChild(sequence4)
-	selector1:addChild(sequence7)
-	
-	sequence1:addChild(noPartner)
-	sequence1:addChild(partnerAfk)
-	sequence1:addChild(matchPartner)
-	
-	sequence7:addChild(towerFocusPlayer)
-	sequence7:addChild(runFromTower)
-	
-	sequence2:addChild(partnerAlive)
-	sequence2:addChild(selector2)
-	
-	sequence3:addChild(partnerDead)
-	sequence3:addChild(selector3)
-	
-	sequence4:addChild(inTurret)
-	sequence4:addChild(recall)
-	
-	selector2:addChild(sequence5)
-	selector2:addChild(partnerClose)
-	selector2:addChild(followPartner)
-	
-	selector3:addChild(sequence6)
-	selector3:addChild(goTurret)
-	
-	sequence5:addChild(partnerRecalling)
-	sequence5:addChild(partnerClose)
-	sequence5:addChild(recall)
-	
-	sequence6:addChild(friendClose)
-	sequence6:addChild(followFriend)
-end
+--End of Classes area
 
 --Util Section
 function detectSpawnPoints()
@@ -402,44 +332,151 @@ function GetPlayers(team, includeDead, includeSelf)
 end
 
 function checkAfk()
-	if partner ~= nil and collectTimer then
-		if partner:GetDistance(allySpawn) < 5000 then
-			lastPartnerMove = GetGameTimer()
-			collectTimer = false
-		end
-	end
-	
-	if partner ~= nil and not collectTimer then
-		if GetGameTimer() >= afkTimerCount + AFK_MAXTIME then
+	if partner ~= nil and GetDistance(partner, allySpawn) < 3000 then
+		if os.clock() >= lastPartnerMove + AFK_MAXTIME then
 			pAfk = true
-		elseif following:GetDistance(allySpawn) > 5000 then
-			collectTimer = true
-			pAfk = false
 		end
+	elseif partner ~= nil then
+		lastPartnerMove = os.clock()
+		pAfk = false
 	end
 end
 
 --End Util Section
 
+function mountBehaviorTree()
+	--1st level
+	root = Sequence:new()
+	sequence1 = Sequence:new()
+	sequence2 = Sequence:new()
+	sequence3 = Sequence:new()
+	sequence4 = Sequence:new()
+	sequence5 = Sequence:new()
+	sequence6 = Sequence:new()
+	sequence7 = Sequence:new() -- Attacked by tower
+	sequence8 = Sequence:new() -- Safe in turret
+	
+	selector1 = Selector:new()
+	selector2 = Selector:new()
+	selector3 = Selector:new()
+	selector4 = Selector:new()
+	selector5 = Selector:new() -- partner afk
+	
+	startTime 		= Action:new{action = "startTime"}
+	noPartner 		= Action:new{action = "noPartner"}
+	partnerAfk 		= Action:new{action = "partnerAfk"}
+	matchPartner 	= Action:new{action = "matchPartner"}
+	partnerAlive 	= Action:new{action = "partnerAlive"}
+	partnerDead 	= Action:new{action = "partnerDead"}
+	inTurret 		= Action:new{action = "inTurret"}
+	recall 			= Action:new{action = "recall"}
+	partnerClose 	= Action:new{action = "partnerClose"}
+	followPartner 	= Action:new{action = "followPartner"}
+	goTurret 		= Action:new{action = "goTurret"}
+	partnerRecalling= Action:new{action = "partnerRecalling"}
+	friendClose		= Action:new{action = "friendClose"}
+	followFriend 	= Action:new{action = "followFriend"}
+	towerFocusPlayer= Action:new{action = "towerFocusPlayer"}
+	runFromTower	= Action:new{action = "runFromTower"}
+	
+	--lvl 1
+	root:addChild(startTime)
+	root:addChild(selector1)
+	
+	--lvl2
+	selector1:addChild(sequence1)
+	selector1:addChild(sequence7) -- flee from tower
+	selector1:addChild(sequence2)
+	selector1:addChild(sequence3)
+	selector1:addChild(sequence4)
+	
+	--lvl3
+	sequence1:addChild(selector5)
+	sequence1:addChild(matchPartner)
+	
+	sequence7:addChild(towerFocusPlayer)
+	sequence7:addChild(runFromTower)
+	
+	sequence2:addChild(partnerAlive)
+	sequence2:addChild(selector2)
+	
+	sequence3:addChild(partnerDead)
+	sequence3:addChild(selector3)
+	
+	sequence4:addChild(inTurret)
+	sequence4:addChild(recall)
+	
+	--lvl 4
+	selector5:addChild(partnerAfk)
+	selector5:addChild(noPartner)
+	
+	selector2:addChild(sequence5)
+	selector2:addChild(partnerClose)
+	selector2:addChild(followPartner)
+	
+	--selector3:addChild(sequence6)
+	selector3:addChild(selector4)
+	
+	--lvl 5
+	sequence5:addChild(partnerRecalling)
+	--sequence5:addChild(partnerClose)
+	sequence5:addChild(recall)
+	
+	--sequence6:addChild(friendClose)
+	--sequence6:addChild(followFriend)
+	
+	selector4:addChild(sequence8)
+	selector4:addChild(goTurret)
+	
+	--lvl 6
+	sequence8:addChild(inTurret)
+	sequence8:addChild(recall)
+end
 
+function OnRecall(hero, channelTimeInMs)
+    if hero.isMe then
+        meRecalling = true
+	elseif hero.name == partner.name then
+		pRecalling = true
+    end
+end
+
+function OnAbortRecall(hero)
+    if hero.isMe then
+        meRecalling = false
+	elseif hero.name == partner.name then
+		pRecalling = false
+    end        
+end
+
+function OnFinishRecall(hero)
+    if hero.isMe then
+        meRecalling = false
+	elseif hero.name == partner.name then
+		pRecalling = false
+    end
+end
 
 function OnDeleteObj(object)
 	if object.name:find("yikes") then
 		FocusOfTower = false
+		yikesTurret = nil
 	elseif object.name:find("TeleportHome") and GetDistance(partner, object) < 70 then
-		DelayAction(function() pRecalling = false end,10)
+		DelayAction(function() 
+		pRecalling = false 
+		end, 0.5, {0})
 	end
 end
 
 function OnCreateObj(object)
 	if object.name:find("yikes") then
 		FocusOfTower = true
+		yikesTurret = GetCloseTower(player, TEAM_ENEMY)
 	elseif object.name:find("TeleportHome") and GetDistance(partner, object) < 70 then
 		pRecalling = true
 	end
 end
 
-<<<<<<< HEAD
 function OnDraw()
 	if partner ~= nil then DrawCircle(partner.x, partner.y, partner.z, 70, ARGB(200,255,255,0)) end
 	if config.followChamp.drawFollowDist then DrawCircle(myHero.x, myHero.y, myHero.z, config.followChamp.followDist, ARGB(200,1,33,0)) end
@@ -448,48 +485,6 @@ end
 function OnTick()
 	if(config.enableScript)then
 		root:run()
-=======
--- CORE
-function Brain()
-	--if following ~= nil and not player.dead then 
-	if state == RECALLING then 
-		if InFountain() then state = FOLLOW
-		else CastSpell(RECALL) end
-		return false
-	elseif state == FOLLOW then
-		--[[if focusing ~= nil and focusing.type == "obj_AI_Turret" and focusing.team ~= player.team then 
-			player:Attack(focusing) 
-		end]]
-		if player.dead then return false end
-		local result = Run(following)
-		if not result then
-			local closest = GetClosePlayer(myHero, player.team)
-			if closest and myHero:GetDistance(closest) < 750 then
-				temp_following = closest
-				state = TEMP_FOLLOW
-			else
-				state = GO_TOWER
-			end
-		end
-	elseif state == TEMP_FOLLOW then 
-		if following.dead then Run(temp_following)
-		else state = FOLLOW end
-	elseif state == GO_TOWER then 
-		local result = Run(GetCloseTower(player,player.team)) 
-		if not result then
-			state = RECALLING
-		end
-	elseif state == SEARCHING_PARTNER then 
-		if SearchingPartner() then state = FOLLOW end
-	elseif state == AVOID_TOWER then
-		local result = Run(GetCloseTower(player,TEAM_ENEMY)) 
-		if not result then
-			state = FOLLOW
-		end
-<<<<<<< HEAD
->>>>>>> parent of 40b1855... Stuck in tower bug correction
-=======
->>>>>>> parent of 40b1855... Stuck in tower bug correction
 	end
 end
 --FIM DA AREA DE CLASSES
@@ -518,6 +513,8 @@ function drawMenu()
 end
 
 function initVariables()
+	
+	bottomPoint = Vector(12100, 2100)
 	--summoners
 	DEFAULT_FOLLOW_DISTANCE = 400
 	DEFAULT_MANA_REGEN = 80
@@ -530,15 +527,17 @@ function initVariables()
 	DEFAULT_MANA_THRESHOLD = 66
 
 	AFK_MAXTIME = 120
-	SCRIPT_START_TIME = 60
-	lastPartnerMove = GetTickCount()
+	SCRIPT_START_TIME = os.clock() + 60 -- change the adc selecting time
+	lastPartnerMove = nil
 	
-	-- GLOBALS
 	FocusOfTower = false
 	partner = nil
 	temp_partner = nil
 	pAfk = true
 	pRecalling = false -- is Partner Recalling?
+	meRecalling = false
+	yikesTurret = nil
+	collectTimer = true
 
 	-- spawn
 	allySpawn = nil
@@ -553,7 +552,8 @@ function OnLoad()
 	initVariables()
 	drawMenu()
 	mountBehaviorTree()
-	PrintChat("Behavior Tree")
+	PrintChat("Passive Follow Loaded")
+	
 	if AutoUpdate then
 		Update()
 	end
