@@ -28,7 +28,6 @@ function OnDeleteObj(object)
 end
 
 function OnProcessSpell(unit,spell)
-	if unit.name == player.name then print(spell.name) end
 	if unit.team == TEAM_ENEMY then
 		if spell.name:lower() == "sightward" or spell.name:lower() == "itemghostward" then
 			table.insert(wards,{name = spell.name, color = green, pos = Vector(spell.endPos), duration = os.clock() + 180})
