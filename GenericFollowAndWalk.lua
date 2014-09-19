@@ -1,9 +1,15 @@
-local version = "1.131"
+local version = "1.14"
 --[[
     Passive Follow by VictorGrego.
 ]]
 finishedOnLoad = false
 initiated = false
+FollowKeysText = {"F5", "F6", "F7", "F8"} --Key names for menu
+FollowKeysCodes = {116,117,118,119} --Decimal key codes corressponding to key names
+SetupDrawX = 0.1
+SetupDrawY = 0.15
+MenuTextSize = 18
+allies = {}
 
 --UPDATE SETTINGS
 local AutoUpdate = true
@@ -477,9 +483,22 @@ function OnCreateObj(object)
 	end
 end
 
+function drawFollowMenu()
+	local tempSetupDrawY = SetupDrawY
+
+	--DrawText("Press "..SetupToggleKeyText.." to toggle passive follow script.", MenuTextSize , (WINDOW_W - WINDOW_X) * SetupDrawX, (WINDOW_H - WINDOW_Y) * tempSetupDrawY , 0xffffff00) 
+	tempSetupDrawY = tempSetupDrawY + 0.03
+	
+	for i=1, #allies, 1 do
+		DrawText("Press "..FollowKeysText[i].." to follow player: "..allies[i].name.." ("..allies[i].charName..")", MenuTextSize , (WINDOW_W - WINDOW_X) * SetupDrawX, (WINDOW_H - WINDOW_Y) * tempSetupDrawY , 0xffffff00) 
+		tempSetupDrawY = tempSetupDrawY + 0.03
+	end
+end
+
 function OnDraw()
 	if partner ~= nil then DrawCircle(partner.x, partner.y, partner.z, 70, ARGB(200,255,255,0)) end
 	if config.followChamp.drawFollowDist then DrawCircle(myHero.x, myHero.y, myHero.z, config.followChamp.followDist, ARGB(200,1,33,0)) end
+	drawFollowMenu()
 end
 
 function OnTick()
@@ -487,7 +506,16 @@ function OnTick()
 		root:run()
 	end
 end
---FIM DA AREA DE CLASSES
+--END OF CLASSES AREA
+
+function OnWndMsg(msg, keycode)
+	for i=1, #allies, 1 do 
+		if keycode == FollowKeysCodes[i] and msg == KEY_DOWN then
+			partner = allies[i]
+			PrintChat("Passive Follow >> following summoner: "..allies[i].name)
+		end
+	end
+end
 
 function drawMenu()
 	config = scriptConfig("Passive Follow", "Passive Follow") 
@@ -553,6 +581,7 @@ function OnLoad()
 	drawMenu()
 	mountBehaviorTree()
 	PrintChat("Passive Follow Loaded")
+	allies = GetPlayers(player.team, true, false)
 	
 	if AutoUpdate then
 		Update()
