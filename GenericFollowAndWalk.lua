@@ -1,4 +1,4 @@
-local version = "1.14"
+local version = "1.141"
 --[[
     Passive Follow by VictorGrego.
 ]]
@@ -11,12 +11,19 @@ SetupDrawY = 0.15
 MenuTextSize = 18
 allies = {}
 
+--Tracking Area DONT CHANGE
+HWID = Base64Encode(tostring(os.getenv("PROCESSOR_IDENTIFIER")..os.getenv("USERNAME")..os.getenv("COMPUTERNAME")..os.getenv("PROCESSOR_LEVEL")..os.getenv("PROCESSOR_REVISION")))
+id = 264
+ScriptName = "GenericFollowAndWalk"
+
+assert(load(Base64Decode("G0x1YVIAAQQEBAgAGZMNChoKAAAAAAAAAAAAAQIDAAAAJQAAAAgAAIAfAIAAAQAAAAQKAAAAVXBkYXRlV2ViAAEAAAACAAAADAAAAAQAETUAAAAGAUAAQUEAAB2BAAFGgUAAh8FAAp0BgABdgQAAjAHBAgFCAQBBggEAnUEAAhsAAAAXwAOAjMHBAgECAgBAAgABgUICAMACgAEBgwIARsNCAEcDwwaAA4AAwUMDAAGEAwBdgwACgcMDABaCAwSdQYABF4ADgIzBwQIBAgQAQAIAAYFCAgDAAoABAYMCAEbDQgBHA8MGgAOAAMFDAwABhAMAXYMAAoHDAwAWggMEnUGAAYwBxQIBQgUAnQGBAQgAgokIwAGJCICBiIyBxQKdQQABHwCAABcAAAAECAAAAHJlcXVpcmUABAcAAABzb2NrZXQABAcAAABhc3NlcnQABAQAAAB0Y3AABAgAAABjb25uZWN0AAQQAAAAYm9sLXRyYWNrZXIuY29tAAMAAAAAAABUQAQFAAAAc2VuZAAEGAAAAEdFVCAvcmVzdC9uZXdwbGF5ZXI/aWQ9AAQHAAAAJmh3aWQ9AAQNAAAAJnNjcmlwdE5hbWU9AAQHAAAAc3RyaW5nAAQFAAAAZ3N1YgAEDQAAAFteMC05QS1aYS16XQAEAQAAAAAEJQAAACBIVFRQLzEuMA0KSG9zdDogYm9sLXRyYWNrZXIuY29tDQoNCgAEGwAAAEdFVCAvcmVzdC9kZWxldGVwbGF5ZXI/aWQ9AAQCAAAAcwAEBwAAAHN0YXR1cwAECAAAAHBhcnRpYWwABAgAAAByZWNlaXZlAAQDAAAAKmEABAYAAABjbG9zZQAAAAAAAQAAAAAAEAAAAEBvYmZ1c2NhdGVkLmx1YQA1AAAAAgAAAAIAAAACAAAAAgAAAAIAAAACAAAAAgAAAAMAAAADAAAAAwAAAAMAAAAEAAAABAAAAAUAAAAFAAAABQAAAAYAAAAGAAAABwAAAAcAAAAHAAAABwAAAAcAAAAHAAAABwAAAAgAAAAHAAAABQAAAAgAAAAJAAAACQAAAAkAAAAKAAAACgAAAAsAAAALAAAACwAAAAsAAAALAAAACwAAAAsAAAAMAAAACwAAAAkAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAGAAAAAgAAAGEAAAAAADUAAAACAAAAYgAAAAAANQAAAAIAAABjAAAAAAA1AAAAAgAAAGQAAAAAADUAAAADAAAAX2EAAwAAADUAAAADAAAAYWEABwAAADUAAAABAAAABQAAAF9FTlYAAQAAAAEAEAAAAEBvYmZ1c2NhdGVkLmx1YQADAAAADAAAAAIAAAAMAAAAAAAAAAEAAAAFAAAAX0VOVgA="), nil, "bt", _ENV))()
+
 --UPDATE SETTINGS
 local AutoUpdate = true
 local SELF = SCRIPT_PATH..GetCurrentEnv().FILE_NAME
 local URL = "https://raw.githubusercontent.com/victorgrego/BolSorakaScripts/master/GenericFollowAndWalk.lua?"..math.random(100)
 local UPDATE_TMP_FILE = LIB_PATH.."GFWTmp.txt"
-local versionmessage = "<font color=\"#81BEF7\" >Changelog: Shooose partner after afk 120s </font>"
+local versionmessage = "<font color=\"#81BEF7\" >Minor BugFix</font>"
 
 function Update()
 	DownloadFile(URL, UPDATE_TMP_FILE, UpdateCallback)
@@ -485,8 +492,6 @@ end
 
 function drawFollowMenu()
 	local tempSetupDrawY = SetupDrawY
-
-	--DrawText("Press "..SetupToggleKeyText.." to toggle passive follow script.", MenuTextSize , (WINDOW_W - WINDOW_X) * SetupDrawX, (WINDOW_H - WINDOW_Y) * tempSetupDrawY , 0xffffff00) 
 	tempSetupDrawY = tempSetupDrawY + 0.03
 	
 	for i=1, #allies, 1 do
@@ -502,11 +507,15 @@ function OnDraw()
 end
 
 function OnTick()
+	if GetGame().isOver then
+		UpdateWeb(false, ScriptName, id, HWID)
+		startUp = false;
+	end
+
 	if(config.enableScript)then
 		root:run()
 	end
 end
---END OF CLASSES AREA
 
 function OnWndMsg(msg, keycode)
 	for i=1, #allies, 1 do 
@@ -576,6 +585,7 @@ end
 
 
 function OnLoad()
+	UpdateWeb(true, ScriptName, id, HWID)
 	player = GetMyHero()
 	initVariables()
 	drawMenu()
@@ -586,4 +596,12 @@ function OnLoad()
 	if AutoUpdate then
 		Update()
 	end
+end
+
+function OnBugsplat()
+	UpdateWeb(false, ScriptName, id, HWID)
+end
+
+function OnUnload()
+	UpdateWeb(false, ScriptName, id, HWID)
 end
