@@ -1,25 +1,19 @@
-local version = "1.271"
+local version = "1.28"
+
+require 'Prodiction'
 --[[
-This script is a version of All-In-One Soraka by One™ Rewriten by VictorGrego!!!
+UnifiedSoraka by VictorGrego
 
 Features:
 - Auto Level Abilities
-- Auto Starcall (Q) [M]
-- Auto Heal (W) [M]
-- Auto Infuse Ally (E) [M]
-- Auto Silence Enemy (E)
+- Auto Starcall (Q)
+- Auto Heal (W)
+- Auto Equinox (E)
 - Auto Ult [M]
-- Factor in passive for maximum effeciency
-- Farm deny cannon minions with (W)
-- Farm steal cannon minions with (E)
 - Avoid hitting enemy under turret
 - Auto Buy items
 
 Changelog:
-
-V1.2 - 05/07/2014 Integrated buying and did a lot of optimizations and bugfix. Also did new auto update system.
-V1.1 - 01/07/2014 Did code optmizations, started integration of 5 scripts that used compose this package
-V1.0 - Original Script Versions by One™
 --]]
 
 -- Champion Check
@@ -124,44 +118,19 @@ local RECALL_DELAY = 0.5
 -- Auto Level
 local levelSequence = {_W,_E,_Q,_W,_W,_R,_W,_E,_W,_E,_R,_E,_E,_Q,_Q,_R,_Q,_Q}
 
--- Auto Heal (W) - Soraka heals the nearest injured ally champion
-local RAW_HEAL_AMOUNT = {70, 120, 170, 220, 270}
-local RAW_HEAL_RATIO = 0.35
-local HEAL_RANGE = 750
+--Target Selector
+ts = TargetSelector(TARGET_LOW_HP, 1000, DAMAGE_MAGIC, true)
 
---[[ healMode notes:
-1 = heal if nearest ally is missing any health, [Normal]
-2 = heal if nearest ally is missing as much health as the heal (ie so none of the heal will be wasted) [Smart]
-3 = heal if nearest ally is below 'healThreshold'. Ie ally is below 0.75 (75%) of their full hp. [Threshold]
--]]
+-- Auto Heal (W) - Soraka heals the nearest injured ally champion
+local RAW_HEAL_AMOUNT = {110, 140, 170, 200, 230}
+local RAW_HEAL_RATIO = 0.6
+local HEAL_RANGE = 450
+local HEAL_MIN_HP = 0.05
 
 --Auto StarCall (Q)
-local STARCALL_RANGE = 675
+local STARCALL_RANGE = 950
 
---[[ starcallMode notes:
-1 = use only when at least one enemy will be hit by starcall [Harass only]
-2 = use only when at least X minions will be hit by starcall (enemy champions may be hit if in range) {Farm/Push only]
-3 = use only when at at least one enemy OR at least X minions will be hit by starcall [Both of the above, hit any]
-4 = use only when at at least one enemy AND at least X minions will be hit by starcall [Both of the above, hit enemy and minions]
--]]
-
---Auto Infuse Ally (E) - Gives mana back to ally
-local RAW_INFUSE_AMOUNT = {20, 40, 60, 80, 100}
-local RAW_INFUSE_RATIO = 0.05 -- of maximum mana
-
-local INFUSE_RANGE = 725
-
---[[ infuseMode notes:
-1 = provide mana to the most mana deprived ally if they are missing any mana
-2 = provide mana to the most mana deprived ally if they yare missing as much mana as the restore amount
--]]
-
---Auto Silence Enemy (E) - Silences an enemy unit
--- Note: SILENCE_RANGE = INFUSE_RANGE (same range)
-
--- Auto Ultimate
--- RAW_ULT_AMOUNT = {150, 250, 350}
--- RAW_ULT_RATIO = 0.55 -- of AP
+local EQUINOX_RANGE = 925
 
 --[[ ultMode notes:
 1 = ult when Soraka is low/about to die, under ultThreshold% of hp [selfish ult]
@@ -173,68 +142,40 @@ local INFUSE_RANGE = 725
 
 -- Soraka performs starcall to help push/farm a lane or harrass enemy champions (or both)
 function doSorakaStarcall()
-
-	-- Perform Starcall based on starcallMode
-	local hitEnemy = false
-	local hitMinions = false
-
-	-- Calculations
-	local enemy = GetPlayer(TEAM_ENEMY, false, false, player, STARCALL_RANGE, NO_RESOURCE)
-
-	if enemy ~= nil then hitEnemy = true end
-
-	if config.autoStarcall.starcallTowerDive == false and UnderTurret(player, true) == true and hitEnemy then return end
-	-- Minion Calculations
-	enemyMinions:update()
-	local totalMinionsInRange = 0
-
-	for _, minion in pairs(enemyMinions.objects) do
-		if player:GetDistance(minion) < STARCALL_RANGE then
-			totalMinionsInRange = totalMinionsInRange + 1
-		end
-
-		if totalMinionsInRange >= config.autoStarcall.numOfHitMinions then 
-			hitMinions = true
-			break 
-		end
-	end
-
-	if config.autoStarcall.starcallMode == 1 and hitEnemy then
-		CastSpell(_Q)
-	elseif config.autoStarcall.starcallMode == 2 and hitMinions then 
-		CastSpell(_Q)
-	elseif config.autoStarcall.starcallMode == 3 and (hitEnemy or hitMinions) then
-		CastSpell(_Q)
-	elseif config.autoStarcall.starcallMode == 4 and (hitEnemy and hitMinions) then
-		CastSpell(_Q)
+	
+	if not ts.target then return end   
+ 
+	local pos, info = Prodiction.GetPrediction(ts.target, STARCALL_RANGE, nil, 0.25, 125, nil)
+	if config.autoStarcall.starcallTowerDive == false and UnderTurret(player, true) == true and info.hitchance ~=0 then return end
+	
+	if pos and info.hitchance ~= 0 then 
+		CastSpell(_Q, pos.x, pos.z)
 	end
 end
 
 -- Soraka Heals the nearby most injured ally or herself, assumes heal is ready to be used
 function doSorakaHeal()
 	-- Find ally champion to heal
-	local ally = GetPlayer(player.team, false, true, player, HEAL_RANGE, "health")
-	--PrintChat("Ally Champion: "..ally.name)
+	local ally = GetPlayer(player.team, false, false, player, HEAL_RANGE, "health")
+	--if ally ~= nil then PrintChat("Ally Champion: "..ally.name) end
 	-- If no eligible ally, return
-	if ally == nil then return end
 
-	-- Heal ally based on healmode
-	if config.autoHeal.healMode == 1 then
-		if ally.health < ally.maxHealth then
-			CastSpell(_W, ally)
-		end
-	elseif config.autoHeal.healMode == 2 then
-		local totalHealAmount = RAW_HEAL_AMOUNT[player:GetSpellData(_W).level] + (RAW_HEAL_RATIO * player.ap)
-		totalHealAmount = calcSalvation(totalHealAmount, ally.health, ally.maxHealth)
-
-
-		if ally.health < (ally.maxHealth - totalHealAmount) then
-			CastSpell(_W, ally)
-		end
-	elseif config.autoHeal.healMode == 3 then
-		if (ally.health/ally.maxHealth) < (config.autoHeal.healThreshold / 100) then
-			CastSpell(_W, ally)
-		end
+	-- Heal ally
+	if ally ~= nil and (ally.health/ally.maxHealth) < (config.autoHeal.healThreshold / 100) then
+		print("Trying to cast");
+		local p = CLoLPacket(0x9A)
+		p.dwArg1 = 1
+		p.dwArg2 = 0
+		p:EncodeF(player.networkID)
+		p:EncodeF(_W)
+		p:EncodeF(player.x)
+		p:EncodeF(player.y)
+		p:EncodeF(player.z)
+		p:EncodeF(ally.x)
+		p:EncodeF(ally.y)
+		p:EncodeF(ally.z)
+		p:EncodeF(ally.networkID)
+		SendPacket(p)
 	end
 end
 
@@ -277,136 +218,19 @@ function doSorakaUlt()
 end
 
 -- Soraka Infuses the most mana deprived ally donating them mana
-function doSorakaInfuse()
-	-- Find ally champion to infuse
-	local ally = GetPlayer(player.team, false, false, player, INFUSE_RANGE, "mana")
-
-	-- Infuse ally based on infuseMode
-	if ally ~= nil then
-		if config.autoInfuse.infuseMode == 1 then
-			if ally.mana < ally.maxMana then
-				CastSpell(_E, ally)
-			end
-		elseif config.autoInfuse.infuseMode == 2 then
-			local totalInfuseAmount = RAW_INFUSE_AMOUNT[player:GetSpellData(_E).level] + (RAW_INFUSE_RATIO * player.maxMana)
-			totalInfuseAmount = calcSalvation(totalInfuseAmount, ally.mana, ally.maxMana)
-
-			if ally.mana < (ally.maxMana - totalInfuseAmount) then
-				CastSpell(_E, ally)
-			end
-		end
-	end
-end
-
--- Soraka silences an enemy if they get in range of infuse
-function doSorakaSilence()
-	if config.autoSilence.silenceTowerDive == false and UnderTurret(player, true) == true then return end
-	-- Find enemy to silence
-	local silenceTarget = GetPlayer(TEAM_ENEMY, false, false, player, INFUSE_RANGE, NO_RESOURCE)
-
-	if silenceTarget ~= nil then
-		CastSpell(_E, silenceTarget)
-	end
-end
-
--- Deny cannon minion farm by healing it 
-function doDenyFarm()
-	-- Get Cannon Minion
-	cannonMinionDeny:update()
-
-	local targetCannonMinion = nil
-
-	for _, minion in pairs(cannonMinionDeny.objects) do
-		if minion.dead == false and (minion.charName == "Blue_Minion_MechCannon" or minion.charName == "Red_Minion_MechCannon") then
-			targetCannonMinion = minion
-		end
-	end
-
-	-- If minion found
-	if targetCannonMinion ~= nil then
-
-		-- Find Nearby Enemy with highest AD (assumption: adc total AD > support total AD)
-		local enemy = GetPlayer(TEAM_ENEMY, false, false, targetCannonMinion, MAX_PLAYER_AA_RANGE, "AD") 
-
-		if enemy ~= nil then
-			local enemyDamage = getDmg("AD", targetCannonMinion, enemy)
-
-			-- Heal cannon if in range and may prevent a last hit
-			if targetCannonMinion.health < enemyDamage and player:GetDistance(targetCannonMinion) < HEAL_RANGE then
-				CastSpell(_W, targetCannonMinion)
-			end	
-		end
-	end
-
-end
-
--- Steal cannon minion farm by infusing it
--- If no minion is in range or minion dies, will call decideE with true skipSteal so that E can be used for something else
-function doStealFarm()
-	-- Get Cannon Minion
-	cannonMinionSteal:update()
-
-	local targetCannonMinion = nil
-
-	for _, minion in pairs(cannonMinionSteal.objects) do
-		if minion.dead == false and (minion.charName == "Blue_Minion_MechCannon" or minion.charName == "Red_Minion_MechCannon") then
-			targetCannonMinion = minion
-		end
-	end
-
-	-- If minion found
-	if targetCannonMinion ~= nil then
-
-		-- Check if infuse will do enough damage to steal it
-		local infuseDamage = getDmg("E", targetCannonMinion, player)
-
-		-- If target is stealable and in range, infuse it
-		if targetCannonMinion.health < infuseDamage and player:GetDistance(targetCannonMinion) < INFUSE_RANGE then
-			CastSpell(_E, targetCannonMinion)
-		end
-	-- If minion is dead or not in range, then use E for something else
-	elseif targetCannonMinion == nil or player:GetDistance(targetCannonMinion) > INFUSE_RANGE then
-		decideE(true)
+function doSorakaEquinox()
+	if not ts.target then return end   
+ 
+	local ePos, info = Prodiction.GetPrediction(ts.target, EQUINOX_RANGE, nil, 0.25, 125, nil)
+	if config.autoEquinox.equinoxTowerDive == false and UnderTurret(player, true) == true and info.hitchance ~=0 then return end
+	
+	if pos and info.hitchance ~= 0 then 
+		CastSpell(_E, ePos.x, ePos.z)
 	end
 end
 
 --[[ Helper Functions ]]--
 
--- Decides whether to use W to heal or to deny farm
-function decideW()
-	-- See if there are any allies nearby
-	local ally = GetPlayer(player.team, false, true, player, HEAL_RANGE, "health")
-
-	-- If ally or Soraka needs health, then heal them
-	if ally ~= nil and (ally.health/ally.maxHealth) < (config.denyStealFarm.denyThreshold / 100) then
-		doSorakaHeal()
-	else -- Otherwise, deny minion farm
-		doDenyFarm()
-	end
-end
-
--- Decides whether to use E defensively or use E offensively
-function decideE(skipSteal)
-	-- See if there are any allies nearby
-	local ally = GetPlayer(player.team, false, false, player, INFUSE_RANGE, "mana")
-
-	-- If ally needs mana, then infuse defensively, otherwise steal or silence
-	if (ally == nil or (ally.mana/ally.maxMana) > (config.denyStealFarm.stealThreshold / 100)) and config.denyStealFarm.stealEnabled and (skipSteal == nil or skipSteal == false) then
-		doStealFarm()
-	elseif (ally == nil or (ally.mana/ally.maxMana) > (config.autoSilence.minAllyManaForSilence / 100)) and config.autoSilence.enabled then
-		doSorakaSilence()
-	elseif ally ~= nil and config.autoInfuse.enabled then
-		doSorakaInfuse()
-	end
-
-end
-
--- Returns correct restore amoune due to Soraka's passive
-function calcSalvation(totalRestoreAmount, targetCurResource, targetMaxResource)
-	local salvationFactor = ((1 - (targetCurResource/targetMaxResource)) / 2) + 1
-
-	return totalRestoreAmount * salvationFactor
-end
 
 --[[ Helper Functions ]]--
 -- Return player based on their resource or stat
@@ -472,49 +296,31 @@ function drawMenu()
 
 	config:addSubMenu("Auto Heal", "autoHeal")
 	config:addSubMenu("Auto Starcall", "autoStarcall")
-	config:addSubMenu("Auto Infuse", "autoInfuse")
-	config:addSubMenu("Auto Silence", "autoSilence")
+	config:addSubMenu("Auto Equinox", "autoEquinox")
 	config:addSubMenu("Auto Ult", "autoUlt")
-	config:addSubMenu("Deny/Steal Farm", "denyStealFarm")
-	
+	config:addSubMenu("Farming", "autoFarm")
 
-	config.denyStealFarm:addParam("denyEnabled", "Deny Cannon Minions (W)", SCRIPT_PARAM_ONOFF, false)
-	config.denyStealFarm:addParam("stealEnabled", "Steal Cannon Minions (E)", SCRIPT_PARAM_ONOFF, false)
-	config.denyStealFarm:addParam("denyThreshold", "Deny Health Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_DENY_THRESHOLD, 0, 100, 0)
-	config.denyStealFarm:addParam("stealThreshold", "Steal Mana Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_STEAL_THRESHOLD, 0, 100, 0)
-	config.denyStealFarm:addParam("doFarm", "Allow minion attack", SCRIPT_PARAM_ONOFF, false)
+	config.autoFarm:addParam("doFarm", "Allow minion attack", SCRIPT_PARAM_ONOFF, false)
 
 	config.autoHeal:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
-	config.autoHeal:addParam("healMode", "Heal Mode", SCRIPT_PARAM_LIST, DEFAULT_HEAL_MODE, { "Normal", "Smart", "Threshold" })
 	config.autoHeal:addParam("healThreshold", "Heal Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_HEAL_THRESHOLD, 0, 100, 0)
 
 	config.autoStarcall:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
 	config.autoStarcall:addParam("starcallTowerDive", "Starcall Under Towers", SCRIPT_PARAM_ONOFF, false)
-	config.autoStarcall:addParam("starcallMode", "Starcall Mode", SCRIPT_PARAM_LIST, DEFAULT_STARCALL_MODE, { "Harass Only", "Farm/Push", "Both (hit any)", "Both (hit enemy and minions)" })
 	config.autoStarcall:addParam("starcallMinMana", "Starcall Minimum Mana", SCRIPT_PARAM_SLICE, DEFAULT_STARCALL_MIN_MANA, 50, 500, 0)
-	config.autoStarcall:addParam("numOfHitMinions", "Minimum Hit Minions", SCRIPT_PARAM_SLICE, DEFAULT_NUM_HIT_MINIONS, 1, 10, 0)
 
-	config.autoInfuse:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
-	config.autoInfuse:addParam("infuseMode", "Infuse Mode", SCRIPT_PARAM_LIST, DEFAULT_INFUSE_MODE, { "Normal", "Smart"})
-
-	config.autoSilence:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
-	config.autoSilence:addParam("silenceTowerDive", "Silence Under Towers", SCRIPT_PARAM_ONOFF, false)
-	config.autoSilence:addParam("minAllyManaForSilence", "Min Ally Mana for Silence (%)", SCRIPT_PARAM_SLICE, DEFAULT_MIN_ALLY_SILENCE, 0, 100, 0)
+	config.autoEquinox:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
+	config.autoEquinox:addParam("equinoxMinMana", "Equinox Min Mana", SCRIPT_PARAM_SLICE, DEFAULT_STARCALL_MIN_MANA, 50, 500, 0)
+	config.autoEquinox:addParam("equinoxTowerDive", "Equinox Under Towers", SCRIPT_PARAM_ONOFF, false)
 
 	config.autoUlt:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
 	config.autoUlt:addParam("ultMode", "Ultimate Mode", SCRIPT_PARAM_LIST, DEFAULT_ULT_MODE, { "Selfish", "Lane Partner", "Entire Team" })
 	config.autoUlt:addParam("ultThreshold", "Ult Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_ULT_THRESHOLD, 0, 100, 0)
-
-	-- Setup minion manager
-	enemyMinions = minionManager(MINION_ENEMY, STARCALL_RANGE, player, MINION_SORT_HEALTH_ASC) -- for starcall
-
-	cannonMinionDeny = minionManager(MINION_ALLY, HEAL_RANGE, player, MINION_SORT_MAXHEALTH_DEC) -- for deny farm
-	cannonMinionSteal = minionManager(MINION_ENEMY, INFUSE_RANGE, player, MINION_SORT_MAXHEALTH_DEC) -- for steal farm
 end
 
 function OnProcessSpell(unit,spell)
-	if config.denyStealFarm.doFarm	 == true and unit.name == player.name and spell.name:lower():find("attack") ~= nil then
-		if(spell.target.name:lower():find("minion")~=nil) then	player:HoldPosition() end
+	if not config.autoFarm.doFarm  and unit.name == player.name and spell.name:lower():find("attack") ~= nil then
+		if(spell.target.name:lower():find("minion")~=nil) then player:HoldPosition() end
 	end
 end
 
@@ -540,13 +346,11 @@ end
 function OnTick()
 	-- Check if script should be run
 	if not config.enableScript then return end
-
+	ts:update()
+	--if(ts.target) then print(ts.target.charName) end
 	-- Auto Level
 	if config.autoLevel and player.level > GetHeroLeveled() then
-		--PrintChat("Trying to upgrade spell")
-		--Packet('0x39', {networkId = myHero.networkID, spellId = SPELL_1, level = 1, remainingLevelPoints = 1}):send()
 		LevelSpell(levelSequence[GetHeroLeveled() + 1])
-		--LevelSpell(SPELL_1)
 	end
 
 	-- Recall Check
@@ -564,22 +368,13 @@ function OnTick()
 	-- Only perform following tasks if not in fountain 
 	if not InFountain() then
 		-- Auto Heal and Deny Farm (W)
-		if player:CanUseSpell(_W) == READY then
-			if config.autoHeal.enabled and not config.denyStealFarm.denyEnabled then
-				doSorakaHeal()
-			elseif not config.autoHeal.enabled and config.denyStealFarm.denyEnabled then
-				doDenyFarm()
-			elseif config.autoHeal.enabled and config.denyStealFarm.denyEnabled then
-				decideW()
-			end
+		if player:CanUseSpell(_W) == READY and config.autoHeal.enabled and player.health / player.maxHealth > HEAL_MIN_HP then
+			doSorakaHeal()
 		end
-
-		-- Auto Infuse Ally and Auto Silence Enemy (E)
-		if player:CanUseSpell(_E) == READY then
-			-- If at least one E option is enabled, decide E
-			if not (not config.autoInfuse.enabled and not config.autoSilence.enabled and not config.denyStealFarm.stealEnabled) then
-				decideE()
-			end
+		
+		--Auto Equinox (E)
+		if player:CanUseSpell(_E) == READY and config.autoEquinox.enabled and player.mana > config.autoEquinox.equinoxMinMana then
+			doSorakaEquinox()
 		end
 
 		-- Auto StarCall (Q)
@@ -593,7 +388,13 @@ function OnLoad()
 	player = GetMyHero()
 	drawMenu()
 	startingTime = GetTickCount()
-
+	
+	if Prodiction.GetVersion() == Prodiction.GetLatestVersion() then
+		print("You got the latest version of Prodiction")
+	else
+		print("Please, update your Prodiction")
+	end
+	
 	if AutoUpdate then
 		Update()
 	end
