@@ -162,7 +162,6 @@ function doSorakaHeal()
 
 	-- Heal ally
 	if ally ~= nil and (ally.health/ally.maxHealth) < (config.autoHeal.healThreshold / 100) then
-		print("Trying to cast");
 		local p = CLoLPacket(0x9A)
 		p.dwArg1 = 1
 		p.dwArg2 = 0
