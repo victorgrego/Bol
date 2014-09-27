@@ -1,6 +1,7 @@
-local version = "1.28"
+local version = "1.281"
 
 require 'Prodiction'
+require 'VPrediction'
 --[[
 UnifiedSoraka by VictorGrego
 
@@ -144,11 +145,21 @@ local EQUINOX_RANGE = 925
 function doSorakaStarcall()
 	
 	if not ts.target then return end   
- 
-	local pos, info = Prodiction.GetPrediction(ts.target, STARCALL_RANGE, nil, 0.25, 125, nil)
-	if config.autoStarcall.starcallTowerDive == false and UnderTurret(player, true) == true and info.hitchance ~=0 then return end
+	local pos, info, hitchance
+	local pro = false;
 	
-	if pos and info.hitchance ~= 0 then 
+	--[[if VIP_USER then
+		pos, info = Prodiction.GetPrediction(ts.target, STARCALL_RANGE, nil, 0.25, 125, nil)
+		pro = true
+	else]]
+	pos, hitchance = VP:GetPredictedPos(ts.target, 0.25, 2000, player, true)
+	--end
+	
+	if config.autoStarcall.starcallTowerDive == false and UnderTurret(player, true) == true and info ~= nil and (info.hitchance ~=0 or hitchance ~= 0) then return end
+	
+	--if pro and pos and info.hitchance ~= 0 then 
+	--	CastSpell(_Q, pos.x, pos.z)
+	if hitchance ~= 0 then
 		CastSpell(_Q, pos.x, pos.z)
 	end
 end
@@ -159,14 +170,30 @@ function doSorakaHeal()
 	local ally = GetPlayer(player.team, false, false, player, HEAL_RANGE, "health")
 	--if ally ~= nil then PrintChat("Ally Champion: "..ally.name) end
 	-- If no eligible ally, return
-
+	
 	-- Heal ally
-	if ally ~= nil and (ally.health/ally.maxHealth) < (config.autoHeal.healThreshold / 100) then
+	if ally ~= nil and VIP_USER then
+		print(ally.type)
+		print(ally.name)
 		local p = CLoLPacket(0x9A)
 		p.dwArg1 = 1
 		p.dwArg2 = 0
 		p:EncodeF(player.networkID)
-		p:EncodeF(_W)
+		p:Encode1(_W)
+		p:EncodeF(player.x)
+		p:EncodeF(player.y)
+		p:EncodeF(player.z)
+		p:EncodeF(ally.x)
+		p:EncodeF(ally.y)
+		p:EncodeF(ally.z)
+		p:EncodeF(ally.networkID)
+		SendPacket(p)
+		
+		p = CLoLPacket(0x99)
+		p.dwArg1 = 1
+		p.dwArg2 = 0
+		p:EncodeF(player.networkID)
+		p:Encode1(_W)
 		p:EncodeF(player.x)
 		p:EncodeF(player.y)
 		p:EncodeF(player.z)
@@ -218,13 +245,17 @@ end
 
 -- Soraka Infuses the most mana deprived ally donating them mana
 function doSorakaEquinox()
-	if not ts.target then return end   
- 
-	local ePos, info = Prodiction.GetPrediction(ts.target, EQUINOX_RANGE, nil, 0.25, 125, nil)
-	if config.autoEquinox.equinoxTowerDive == false and UnderTurret(player, true) == true and info.hitchance ~=0 then return end
+
+	if not ts.target then return end  
+	local pos, info, hitchance
+	local pro = false;
+
+	pos, hitchance = VP:GetPredictedPos(ts.target, 0.25, 2000, player, true)
 	
-	if pos and info.hitchance ~= 0 then 
-		CastSpell(_E, ePos.x, ePos.z)
+	if config.autoStarcall.starcallTowerDive == false and UnderTurret(player, true) == true and (info.hitchance ~=0 or hitchance ~= 0) then return end
+
+	if hitchance ~= 0 then
+		CastSpell(_E, pos.x, pos.z)
 	end
 end
 
@@ -367,7 +398,7 @@ function OnTick()
 	-- Only perform following tasks if not in fountain 
 	if not InFountain() then
 		-- Auto Heal and Deny Farm (W)
-		if player:CanUseSpell(_W) == READY and config.autoHeal.enabled and player.health / player.maxHealth > HEAL_MIN_HP then
+		if player:CanUseSpell(_W) == READY and config.autoHeal.enabled  then
 			doSorakaHeal()
 		end
 		
@@ -387,6 +418,8 @@ function OnLoad()
 	player = GetMyHero()
 	drawMenu()
 	startingTime = GetTickCount()
+	
+	VP = VPrediction()
 	
 	if Prodiction.GetVersion() == Prodiction.GetLatestVersion() then
 		print("You got the latest version of Prodiction")
