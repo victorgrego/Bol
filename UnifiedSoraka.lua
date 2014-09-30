@@ -1,4 +1,4 @@
-local version = "1.282"
+local version = "1.283"
 
 require 'VPrediction'
 --[[
@@ -171,36 +171,8 @@ function doSorakaHeal()
 	-- If no eligible ally, return
 	
 	-- Heal ally
-	if ally ~= nil and VIP_USER then
-		print(ally.type)
-		print(ally.name)
-		local p = CLoLPacket(0x9A)
-		p.dwArg1 = 1
-		p.dwArg2 = 0
-		p:EncodeF(player.networkID)
-		p:Encode1(_W)
-		p:EncodeF(player.x)
-		p:EncodeF(player.y)
-		p:EncodeF(player.z)
-		p:EncodeF(ally.x)
-		p:EncodeF(ally.y)
-		p:EncodeF(ally.z)
-		p:EncodeF(ally.networkID)
-		SendPacket(p)
-		
-		p = CLoLPacket(0x99)
-		p.dwArg1 = 1
-		p.dwArg2 = 0
-		p:EncodeF(player.networkID)
-		p:Encode1(_W)
-		p:EncodeF(player.x)
-		p:EncodeF(player.y)
-		p:EncodeF(player.z)
-		p:EncodeF(ally.x)
-		p:EncodeF(ally.y)
-		p:EncodeF(ally.z)
-		p:EncodeF(ally.networkID)
-		SendPacket(p)
+	if ally ~= nil and (ally.health/ally.maxHealth) < config.autoHeal.healThreshold/100 then
+		CastSpell(_W, ally)
 	end
 end
 
@@ -333,13 +305,15 @@ function drawMenu()
 
 	config.autoHeal:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
 	config.autoHeal:addParam("healThreshold", "Heal Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_HEAL_THRESHOLD, 0, 100, 0)
+	config.autoHeal:addParam("healMinMana", "Starcall Minimum Mana (%)", SCRIPT_PARAM_SLICE, DEFAULT_STARCALL_MIN_MANA, 0, 100, 0)
+	config.autoHeal:addParam("sorakaThreshold", "Soraka HP Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_HEAL_THRESHOLD, 5, 100, 0)
 
 	config.autoStarcall:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
 	config.autoStarcall:addParam("starcallTowerDive", "Starcall Under Towers", SCRIPT_PARAM_ONOFF, false)
-	config.autoStarcall:addParam("starcallMinMana", "Starcall Minimum Mana", SCRIPT_PARAM_SLICE, DEFAULT_STARCALL_MIN_MANA, 50, 500, 0)
+	config.autoStarcall:addParam("starcallMinMana", "Starcall Minimum Mana", SCRIPT_PARAM_SLICE, DEFAULT_STARCALL_MIN_MANA, 0, 100, 0)
 
 	config.autoEquinox:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
-	config.autoEquinox:addParam("equinoxMinMana", "Equinox Min Mana", SCRIPT_PARAM_SLICE, DEFAULT_STARCALL_MIN_MANA, 50, 500, 0)
+	config.autoEquinox:addParam("equinoxMinMana", "Equinox Min Mana", SCRIPT_PARAM_SLICE, DEFAULT_STARCALL_MIN_MANA, 0, 100, 0)
 	config.autoEquinox:addParam("equinoxTowerDive", "Equinox Under Towers", SCRIPT_PARAM_ONOFF, false)
 
 	config.autoUlt:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
@@ -397,17 +371,17 @@ function OnTick()
 	-- Only perform following tasks if not in fountain 
 	if not InFountain() then
 		-- Auto Heal and Deny Farm (W)
-		if player:CanUseSpell(_W) == READY and config.autoHeal.enabled  then
+		if player:CanUseSpell(_W) == READY and config.autoHeal.enabled  and (player.mana/player.maxMana) > config.autoHeal.healMinMana / 100  and player.health/player.maxHealth > config.autoHeal.sorakaThreshold/100 then
 			doSorakaHeal()
 		end
 		
 		--Auto Equinox (E)
-		if player:CanUseSpell(_E) == READY and config.autoEquinox.enabled and player.mana > config.autoEquinox.equinoxMinMana then
+		if player:CanUseSpell(_E) == READY and config.autoEquinox.enabled and player.mana/player.maxMana > config.autoEquinox.equinoxMinMana/100 then
 			doSorakaEquinox()
 		end
 
 		-- Auto StarCall (Q)
-		if config.autoStarcall.enabled and player:CanUseSpell(_Q) == READY and player.mana > config.autoStarcall.starcallMinMana then
+		if config.autoStarcall.enabled and player:CanUseSpell(_Q) == READY and player.mana/player.maxMana  > config.autoStarcall.starcallMinMana/100 then
 			doSorakaStarcall()
 		end
 	end
