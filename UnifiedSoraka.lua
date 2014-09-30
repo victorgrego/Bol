@@ -1,6 +1,5 @@
-local version = "1.281"
+local version = "1.282"
 
-require 'Prodiction'
 require 'VPrediction'
 --[[
 UnifiedSoraka by VictorGrego
@@ -54,7 +53,7 @@ buyDelay = 100 --default 100
 --UPDATE SETTINGS
 local AutoUpdate = true
 local SELF = SCRIPT_PATH..GetCurrentEnv().FILE_NAME
-local URL = "https://raw.githubusercontent.com/victorgrego/BolSorakaScripts/master/UnifiedSoraka.lua?"..math.random(100)
+local URL = "https://raw.githubusercontent.com/victorgrego/Bol/master/UnifiedSoraka.lua?"..math.random(100)
 local UPDATE_TMP_FILE = LIB_PATH.."UNSTmp.txt"
 local versionmessage = "<font color=\"#81BEF7\" >Changelog: Added autobuy option and changed build to spam skills</font>"
 
@@ -420,12 +419,6 @@ function OnLoad()
 	startingTime = GetTickCount()
 	
 	VP = VPrediction()
-	
-	if Prodiction.GetVersion() == Prodiction.GetLatestVersion() then
-		print("You got the latest version of Prodiction")
-	else
-		print("Please, update your Prodiction")
-	end
 	
 	if AutoUpdate then
 		Update()
