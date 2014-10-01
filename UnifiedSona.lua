@@ -1,4 +1,4 @@
-local version = "1.0"
+local version = "1.01"
 --[[
 
 --]]
@@ -14,7 +14,7 @@ local AutoUpdate = true
 local SELF = SCRIPT_PATH..GetCurrentEnv().FILE_NAME
 local URL = "https://raw.githubusercontent.com/victorgrego/Bol/master/UnifiedSona.lua?"..math.random(100)
 local UPDATE_TMP_FILE = LIB_PATH.."UNSTmp.txt"
-local versionmessage = "<font color=\"#81BEF7\" >Changelog: Added autobuy option and changed build to spam skills</font>"
+local versionmessage = "<font color=\"#81BEF7\" >Changelog:Minor optimizations</font>"
 
 function Update()
 	DownloadFile(URL, UPDATE_TMP_FILE, UpdateCallback)
@@ -86,6 +86,11 @@ lastBuy = 0
 
 buyDelay = 100 --default 100
 
+-------Orbwalk info-------
+local lastAttack, lastWindUpTime, lastAttackCD = 0, 0, 0
+local myTrueRange = 0
+local myTarget = nil
+-------/Orbwalk info-------
 
 
 -- Constants (do not change)
@@ -117,14 +122,14 @@ function Behavior()
 	AAenemies = GetPlayers(TEAM_ENEMY, false, false, SONA_RANGE)
 	
 	--autoQ
-	if enemies ~= nil and #enemies > 0 and (player.mana/player.maxMana) > config.autoHarass.harassMinMana / 100 and player:CanUseSpell(_Q) == READY then
+	if enemies ~= nil and #enemies > 0 and getManaPercent() > config.autoHarass.harassMinMana and player:CanUseSpell(_Q) == READY then
 		CastSpell(_Q)
 	end
 	
 	--autoW
-	if friends ~= nil and #friends > 0 and (player.mana/player.maxMana) > config.autoHeal.healMinMana / 100 and player:CanUseSpell(_W) == READY then
+	if friends ~= nil and #friends > 0 and getManaPercent() > config.autoHeal.healMinMana and player:CanUseSpell(_W) == READY then
 		for i = 1, #friends, 1 do
-			if (friends[i].health / friends[i].maxHealth) < config.autoHeal.healThreshold / 100 then
+			if getHealthPercent(friends[i]) < config.autoHeal.healThreshold then
 				CastSpell(_W)
 				break
 			end
@@ -132,7 +137,7 @@ function Behavior()
 	end
 	
 	--autoE
-	if friends ~= nil and #friends > 0 and player:CanUseSpell(_E) == READY and (player.maxMana/player.mana) > config.autoCelerity.celerityMinMana / 100 then
+	if friends ~= nil and #friends > 0 and player:CanUseSpell(_E) == READY and getManaPercent() > config.autoCelerity.celerityMinMana then
 		for i = 1, #Efriends, 1 do
 			if Efriends[i].isFleeing then
 				CastSpell(_E)
@@ -141,10 +146,7 @@ function Behavior()
 		end
 	end
 	
-	if ts.target == nil then return end
-	if #AAenemies ~= nil and #AAenemies > 0 then player:Attack(ts.target) end
-	
-	if not config.autoUlt.enabled then return end
+	if ts.target == nil or not config.autoUlt.enabled then return end
 	local AOECastPosition, MainTargetHitChance, nTargets = VP:GetLineAOECastPosition(ts.target, 0.25, 150, 1000, 2500, player)
 	if MainTargetHitChance ~= 0 and nTargets > 1 then CastSpell(_R, AOECastPosition.x, AOECastPosition.z) end
 	if ts.target.isFleeing and MainTargetHitChance ~= 0 then CastSpell(_R, AOECastPosition.x, AOECastPosition.z) end
@@ -183,8 +185,8 @@ function GetPlayers(team, includeDead, includeSelf, maxDistance)
 end
 
 function buy()
-	if InFountain() or player.dead then
-			-- Item purchases
+	if InFountain() or player.dead then	
+		-- Item purchases
 		if GetTickCount() > lastBuy + buyDelay then
 			if GetInventorySlotItem(shopList[nextbuyIndex]) ~= nil then
 				--Last Buy successful
@@ -227,8 +229,28 @@ function drawMenu()
 	config.autoUlt:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)	
 end
 
+function isMyAutoAttack(unit, spell)
+	return (unit.name == player.name and spell.name:lower():find("attack") ~= nil)
+end
+
+function getManaPercent(unit)
+	local obj = unit or player
+	return (obj.mana / obj.maxMana) * 100
+end
+
+function getHealthPercent(unit)
+	local obj = unit or player
+	return (obj.health / obj.maxHealth) * 100
+end
+
 function OnProcessSpell(unit,spell)
-	if not config.autoFarm.doFarm  and unit.name == player.name and spell.name:lower():find("attack") ~= nil then
+	if config.autoFarm.doFarm and isMyAutoAttack(unit, spell) then 
+		if spell.name:lower():find("attack") then
+			lastAttack = GetTickCount() - GetLatency()/2
+			lastWindUpTime = spell.windUpTime*1000
+			lastAttackCD = spell.animationTime*1000
+		end 
+	elseif isMyAutoAttack(unit, spell) then
 		if(spell.target.name:lower():find("minion")~=nil) then player:HoldPosition() end
 	end
 end
@@ -251,16 +273,30 @@ function OnDeleteObj(obj)
 	end
 end
 
+function _OrbWalk()
+	myTarget = ts.target
+	if myTarget == nil then return end
+	if GetDistance(myTarget) <= myTrueRange and timeToShoot() then		
+		myHero:Attack(myTarget)
+	end
+end
+
+function timeToShoot()
+	return (GetTickCount() + GetLatency()/2 > lastAttack + lastAttackCD)
+end 
+
 --[[ OnTick ]]--
 function OnTick()
 	-- Check if script should be run
-	if not config.enableScript then return end
+	--if not config.enableScript then return end
 	
 	--target update
 	ts:update()
+	_OrbWalk()
 	
 	-- Auto Level
 	if config.autoLevel and player.level > GetHeroLeveled() then
+		
 		LevelSpell(levelSequence[GetHeroLeveled() + 1])
 	end
 
@@ -269,7 +305,7 @@ function OnTick()
 		return -- Don't perform recall canceling actions
 	end
 
-	if config.autoBuy then buy() end 
+	buy()
 
 	-- Only perform following tasks if not in fountain 
 	if not InFountain() then
@@ -283,6 +319,7 @@ function OnLoad()
 	startingTime = GetTickCount()
 	
 	VP = VPrediction()
+	myTrueRange = myHero.range + GetDistance(myHero.minBBox)
 	
 	if AutoUpdate then
 		Update()
