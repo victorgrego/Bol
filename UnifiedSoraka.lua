@@ -1,4 +1,4 @@
-local version = "1.283"
+local version = "1.284"
 
 require 'VPrediction'
 --[[
@@ -348,7 +348,7 @@ end
 --[[ OnTick ]]--
 function OnTick()
 	-- Check if script should be run
-	if not config.enableScript then return end
+	--if not config.enableScript then return end
 	ts:update()
 	--if(ts.target) then print(ts.target.charName) end
 	-- Auto Level
