@@ -1,4 +1,4 @@
-local version = "1.284"
+local version = "1.285"
 
 require 'VPrediction'
 --[[
@@ -119,7 +119,7 @@ local RECALL_DELAY = 0.5
 local levelSequence = {_W,_E,_Q,_W,_W,_R,_W,_E,_W,_E,_R,_E,_E,_Q,_Q,_R,_Q,_Q}
 
 --Target Selector
-ts = TargetSelector(TARGET_LOW_HP, 1000, DAMAGE_MAGIC, true)
+--ts = TargetSelector(TARGET_LOW_HP, 1000, DAMAGE_MAGIC, true)
 
 -- Auto Heal (W) - Soraka heals the nearest injured ally champion
 local RAW_HEAL_AMOUNT = {110, 140, 170, 200, 230}
@@ -142,8 +142,8 @@ local EQUINOX_RANGE = 925
 
 -- Soraka performs starcall to help push/farm a lane or harrass enemy champions (or both)
 function doSorakaStarcall()
-	
-	if not ts.target then return end   
+	TargetSelector:update()
+	if not TargetSelector.target then return end   
 	local pos, info, hitchance
 	local pro = false;
 	
@@ -151,7 +151,7 @@ function doSorakaStarcall()
 		pos, info = Prodiction.GetPrediction(ts.target, STARCALL_RANGE, nil, 0.25, 125, nil)
 		pro = true
 	else]]
-	pos, hitchance = VP:GetPredictedPos(ts.target, 0.25, 2000, player, true)
+	pos, hitchance = VP:GetPredictedPos(TargetSelector.target, 0.25, 2000, player, true)
 	--end
 	
 	if config.autoStarcall.starcallTowerDive == false and UnderTurret(player, true) == true and info ~= nil and (info.hitchance ~=0 or hitchance ~= 0) then return end
@@ -216,14 +216,14 @@ end
 
 -- Soraka Infuses the most mana deprived ally donating them mana
 function doSorakaEquinox()
-
-	if not ts.target then return end  
+	TargetSelector:update()
+	if not TargetSelector.target then return end  
 	local pos, info, hitchance
 	local pro = false;
 
-	pos, hitchance = VP:GetPredictedPos(ts.target, 0.25, 2000, player, true)
+	pos, hitchance = VP:GetPredictedPos(TargetSelector.target, 0.25, 2000, player, true)
 	
-	if config.autoStarcall.starcallTowerDive == false and UnderTurret(player, true) == true and (info.hitchance ~=0 or hitchance ~= 0) then return end
+	if config.autoStarcall.starcallTowerDive == false and UnderTurret(player, true) == true and (hitchance ~= 0) then return end
 
 	if hitchance ~= 0 then
 		CastSpell(_E, pos.x, pos.z)
@@ -263,7 +263,7 @@ function GetPlayer(team, includeDead, includeSelf, distanceTo, distanceAmount, r
 	return target
 end
 
-function buy()
+function buy()	
 	if InFountain() or player.dead then
 			-- Item purchases
 		if GetTickCount() > lastBuy + buyDelay then
@@ -271,14 +271,6 @@ function buy()
 				--Last Buy successful
 				nextbuyIndex = nextbuyIndex + 1
 			else
-				--Last Buy unsuccessful (buy again)
-				--[[local p = CLoLPacket(0x82)
-				p.dwArg1 = 1
-				p.dwArg2 = 0
-				p:EncodeF(myHero.networkID)
-				p:Encode4(shopList[nextbuyIndex])
-				SendPacket(p)						
-				lastBuy = GetTickCount()]]
 				lastBuy = GetTickCount()
 				BuyItem(shopList[nextbuyIndex])
 			end
@@ -319,6 +311,10 @@ function drawMenu()
 	config.autoUlt:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
 	config.autoUlt:addParam("ultMode", "Ultimate Mode", SCRIPT_PARAM_LIST, DEFAULT_ULT_MODE, { "Selfish", "Lane Partner", "Entire Team" })
 	config.autoUlt:addParam("ultThreshold", "Ult Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_ULT_THRESHOLD, 0, 100, 0)
+	
+	TargetSelector = TargetSelector(TARGET_LOW_HP, 1000, DAMAGE_MAGIC, true)
+	TargetSelector.name = "Soraka"
+	config:addTS(TargetSelector)
 end
 
 function OnProcessSpell(unit,spell)
@@ -349,13 +345,13 @@ end
 function OnTick()
 	-- Check if script should be run
 	--if not config.enableScript then return end
-	ts:update()
+	
 	--if(ts.target) then print(ts.target.charName) end
 	-- Auto Level
 	if config.autoLevel and player.level > GetHeroLeveled() then
 		LevelSpell(levelSequence[GetHeroLeveled() + 1])
 	end
-
+	
 	-- Recall Check
 	if (isRecalling) then
 		return -- Don't perform recall canceling actions
@@ -367,7 +363,7 @@ function OnTick()
 	end
 
 	if config.autoBuy then buy() end 
-
+	
 	-- Only perform following tasks if not in fountain 
 	if not InFountain() then
 		-- Auto Heal and Deny Farm (W)
@@ -388,9 +384,14 @@ function OnTick()
 end
 
 function OnLoad()
+BuyItem(3301)
 	player = GetMyHero()
 	drawMenu()
 	startingTime = GetTickCount()
+	
+	nextbuyIndex = 1
+	lastBuy = 0
+
 	
 	VP = VPrediction()
 	
