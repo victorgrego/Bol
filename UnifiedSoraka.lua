@@ -1,4 +1,4 @@
-local version = "1.285"
+local version = "1.2851"
 
 require 'VPrediction'
 --[[
@@ -384,7 +384,6 @@ function OnTick()
 end
 
 function OnLoad()
-BuyItem(3301)
 	player = GetMyHero()
 	drawMenu()
 	startingTime = GetTickCount()
