@@ -1,4 +1,4 @@
-local version = "1.01"
+local version = "1.02"
 --[[
 
 --]]
@@ -14,7 +14,7 @@ local AutoUpdate = true
 local SELF = SCRIPT_PATH..GetCurrentEnv().FILE_NAME
 local URL = "https://raw.githubusercontent.com/victorgrego/Bol/master/UnifiedSona.lua?"..math.random(100)
 local UPDATE_TMP_FILE = LIB_PATH.."UNSTmp.txt"
-local versionmessage = "<font color=\"#81BEF7\" >Changelog:Minor optimizations</font>"
+local versionmessage = "<font color=\"#81BEF7\" >Changelog: Added autobuy option and changed build to spam skills</font>"
 
 function Update()
 	DownloadFile(URL, UPDATE_TMP_FILE, UpdateCallback)
@@ -122,14 +122,14 @@ function Behavior()
 	AAenemies = GetPlayers(TEAM_ENEMY, false, false, SONA_RANGE)
 	
 	--autoQ
-	if enemies ~= nil and #enemies > 0 and getManaPercent() > config.autoHarass.harassMinMana and player:CanUseSpell(_Q) == READY then
+	if enemies ~= nil and #enemies > 0 and getManaPercent() > Menu.autoHarass.harassMinMana and player:CanUseSpell(_Q) == READY then
 		CastSpell(_Q)
 	end
 	
 	--autoW
-	if friends ~= nil and #friends > 0 and getManaPercent() > config.autoHeal.healMinMana and player:CanUseSpell(_W) == READY then
+	if friends ~= nil and #friends > 0 and getManaPercent() > Menu.autoHeal.healMinMana and player:CanUseSpell(_W) == READY then
 		for i = 1, #friends, 1 do
-			if getHealthPercent(friends[i]) < config.autoHeal.healThreshold then
+			if getHealthPercent(friends[i]) < Menu.autoHeal.healThreshold then
 				CastSpell(_W)
 				break
 			end
@@ -137,7 +137,7 @@ function Behavior()
 	end
 	
 	--autoE
-	if friends ~= nil and #friends > 0 and player:CanUseSpell(_E) == READY and getManaPercent() > config.autoCelerity.celerityMinMana then
+	if friends ~= nil and #friends > 0 and player:CanUseSpell(_E) == READY and getManaPercent() > Menu.autoCelerity.celerityMinMana then
 		for i = 1, #Efriends, 1 do
 			if Efriends[i].isFleeing then
 				CastSpell(_E)
@@ -146,7 +146,7 @@ function Behavior()
 		end
 	end
 	
-	if ts.target == nil or not config.autoUlt.enabled then return end
+	if ts.target == nil or not Menu.autoUlt.enabled then return end
 	local AOECastPosition, MainTargetHitChance, nTargets = VP:GetLineAOECastPosition(ts.target, 0.25, 150, 1000, 2500, player)
 	if MainTargetHitChance ~= 0 and nTargets > 1 then CastSpell(_R, AOECastPosition.x, AOECastPosition.z) end
 	if ts.target.isFleeing and MainTargetHitChance ~= 0 then CastSpell(_R, AOECastPosition.x, AOECastPosition.z) end
@@ -202,31 +202,33 @@ end
 --draws Menu
 function drawMenu()
 	-- Config Menu
-	config = scriptConfig("UnifiedSona", "UnifiedSona")	
+	Menu = scriptConfig("UnifiedSona", "UnifiedSona")	
 
-	config:addParam("enableScript", "Enable Script", SCRIPT_PARAM_ONOFF, true)
-	config:addParam("autoBuy", "Auto Buy Items", SCRIPT_PARAM_ONOFF, true)
-	config:addParam("autoLevel", "Auto Level", SCRIPT_PARAM_ONOFF, true)
-
-	config:addSubMenu("Auto Heal", "autoHeal")
-	config:addSubMenu("Auto Celerity", "autoCelerity")
-	config:addSubMenu("Auto Harass", "autoHarass")
-	config:addSubMenu("Auto Ult", "autoUlt")
-	config:addSubMenu("Farming", "autoFarm")
+	Menu:addSubMenu("Commons", "common")
 	
-	config.autoFarm:addParam("doFarm", "Allow minion attack", SCRIPT_PARAM_ONOFF, false)
-	
-	config.autoCelerity:addParam("celerityMinMana", "Celerity Minimum Mana (%)", SCRIPT_PARAM_SLICE, DEFAULT_HEAL_MIN_MANA, 1, 100, 0)
-	
-	config.autoHeal:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
-	config.autoHeal:addParam("healMinMana", "Heal Minimum Mana (%)", SCRIPT_PARAM_SLICE, DEFAULT_HEAL_MIN_MANA, 1, 100, 0)
-	config.autoHeal:addParam("healThreshold", "Heal Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_HEAL_THRESHOLD, 1, 100, 0)
+	Menu.common:addParam("enableScript", "Enable Script", SCRIPT_PARAM_ONOFF, true)
+	Menu.common:addParam("autoBuy", "Auto Buy Items", SCRIPT_PARAM_ONOFF, true)
+	Menu.common:addParam("autoLevel", "Auto Level", SCRIPT_PARAM_ONOFF, true)
 
-	config.autoHarass:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
-	config.autoHarass:addParam("harassTowerDive", "Harass Under Towers", SCRIPT_PARAM_ONOFF, false)
-	config.autoHarass:addParam("harassMinMana", "Harass Minimum Mana (%)", SCRIPT_PARAM_SLICE, DEFAULT_HARASS_MIN_MANA, 1, 100, 0)
+	Menu:addSubMenu("Auto Heal", "autoHeal")
+	Menu:addSubMenu("Auto Celerity", "autoCelerity")
+	Menu:addSubMenu("Auto Harass", "autoHarass")
+	Menu:addSubMenu("Auto Ult", "autoUlt")
+	Menu:addSubMenu("Farming", "autoFarm")
+	
+	Menu.autoFarm:addParam("doFarm", "Allow minion attack", SCRIPT_PARAM_ONOFF, false)
+	
+	Menu.autoCelerity:addParam("celerityMinMana", "Celerity Minimum Mana (%)", SCRIPT_PARAM_SLICE, DEFAULT_HEAL_MIN_MANA, 1, 100, 0)
+	
+	Menu.autoHeal:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
+	Menu.autoHeal:addParam("healMinMana", "Heal Minimum Mana (%)", SCRIPT_PARAM_SLICE, DEFAULT_HEAL_MIN_MANA, 1, 100, 0)
+	Menu.autoHeal:addParam("healThreshold", "Heal Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_HEAL_THRESHOLD, 1, 100, 0)
 
-	config.autoUlt:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)	
+	Menu.autoHarass:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
+	Menu.autoHarass:addParam("harassTowerDive", "Harass Under Towers", SCRIPT_PARAM_ONOFF, false)
+	Menu.autoHarass:addParam("harassMinMana", "Harass Minimum Mana (%)", SCRIPT_PARAM_SLICE, DEFAULT_HARASS_MIN_MANA, 1, 100, 0)
+
+	Menu.autoUlt:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)	
 end
 
 function isMyAutoAttack(unit, spell)
@@ -244,7 +246,7 @@ function getHealthPercent(unit)
 end
 
 function OnProcessSpell(unit,spell)
-	if config.autoFarm.doFarm and isMyAutoAttack(unit, spell) then 
+	if Menu.autoFarm.doFarm and isMyAutoAttack(unit, spell) then 
 		if spell.name:lower():find("attack") then
 			lastAttack = GetTickCount() - GetLatency()/2
 			lastWindUpTime = spell.windUpTime*1000
@@ -295,7 +297,7 @@ function OnTick()
 	_OrbWalk()
 	
 	-- Auto Level
-	if config.autoLevel and player.level > GetHeroLeveled() then
+	if Menu.autoLevel and player.level > GetHeroLeveled() then
 		
 		LevelSpell(levelSequence[GetHeroLeveled() + 1])
 	end
