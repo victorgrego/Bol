@@ -1,6 +1,7 @@
-local version = "1.2851"
+local version = "1.286"
 
-require 'VPrediction'
+require "VPrediction"
+
 --[[
 UnifiedSoraka by VictorGrego
 
@@ -151,10 +152,10 @@ function doSorakaStarcall()
 		pos, info = Prodiction.GetPrediction(ts.target, STARCALL_RANGE, nil, 0.25, 125, nil)
 		pro = true
 	else]]
-	pos, hitchance = VP:GetPredictedPos(TargetSelector.target, 0.25, 2000, player, true)
+	pos, hitchance = VP:GetPredictedPos(TargetSelector.target, 0.25, 2000, myHero, true)
 	--end
 	
-	if config.autoStarcall.starcallTowerDive == false and UnderTurret(player, true) == true and info ~= nil and (info.hitchance ~=0 or hitchance ~= 0) then return end
+	if Menu.autoStarcall.starcallTowerDive == false and UnderTurret(myHero, true) == true and info ~= nil and (info.hitchance ~=0 or hitchance ~= 0) then return end
 	
 	--if pro and pos and info.hitchance ~= 0 then 
 	--	CastSpell(_Q, pos.x, pos.z)
@@ -166,12 +167,12 @@ end
 -- Soraka Heals the nearby most injured ally or herself, assumes heal is ready to be used
 function doSorakaHeal()
 	-- Find ally champion to heal
-	local ally = GetPlayer(player.team, false, false, player, HEAL_RANGE, "health")
+	local ally = GetPlayer(myHero.team, false, false, myHero, HEAL_RANGE, "health")
 	--if ally ~= nil then PrintChat("Ally Champion: "..ally.name) end
 	-- If no eligible ally, return
 	
 	-- Heal ally
-	if ally ~= nil and (ally.health/ally.maxHealth) < config.autoHeal.healThreshold/100 then
+	if ally ~= nil and (ally.health/ally.maxHealth) < Menu.autoHeal.healThreshold/100 then
 		CastSpell(_W, ally)
 	end
 end
@@ -179,20 +180,20 @@ end
 -- Soraka uses ultimate based on user preference
 function doSorakaUlt()
 	-- Ult based on ultMode
-	if config.autoUlt.ultMode == 1 then
-		if (player.health/player.maxHealth) < (config.autoUlt.ultThreshold / 100) then
+	if Menu.autoUlt.ultMode == 1 then
+		if (myHero.health/myHero.maxHealth) < (Menu.autoUlt.ultThreshold / 100) then
 			CastSpell(_R)
 		end
-	elseif config.autoUlt.ultMode == 2 then
+	elseif Menu.autoUlt.ultMode == 2 then
 		-- Find nearby ally champion (your lane partner usually) that is fatally injured
 
-		local ally = GetPlayer(player.team, false, true, nil, GLOBAL_RANGE, "health")
+		local ally = GetPlayer(myHero.team, false, true, nil, GLOBAL_RANGE, "health")
 
 		-- Use ult if suitable ally found
-		if ally ~= nil and (ally.health/ally.maxHealth) < (config.autoUlt.ultThreshold / 100) then
+		if ally ~= nil and (ally.health/ally.maxHealth) < (Menu.autoUlt.ultThreshold / 100) then
 			CastSpell(_R)
 		end
-	elseif config.autoUlt.ultMode == 3 then
+	elseif Menu.autoUlt.ultMode == 3 then
 		--find total hp of team as a percentage, ie team had 40% of their max hp
 		local totalMissingHP = 0
 		local counter = 0
@@ -200,7 +201,7 @@ function doSorakaUlt()
 		for i=1, heroManager.iCount do
 			local hero = heroManager:GetHero(i)
 
-			if hero ~= nil and hero.type == "AIHeroClient" and hero.team == player.team and hero.dead == false then --checks for ally and that person is not dead
+			if hero ~= nil and hero.type == "AIHeroClient" and hero.team == myHero.team and hero.dead == false then --checks for ally and that person is not dead
 				totalMissingHP = totalMissingHP + (hero.health/hero.maxHealth)
 				counter = counter + 1
 			end
@@ -208,7 +209,7 @@ function doSorakaUlt()
 
 		totalMissingHP = totalMissingHP / counter
 
-		if totalMissingHP < (config.autoUlt.ultThreshold / 100) then
+		if totalMissingHP < (Menu.autoUlt.ultThreshold / 100) then
 			CastSpell(_R)
 		end
 	end
@@ -221,9 +222,9 @@ function doSorakaEquinox()
 	local pos, info, hitchance
 	local pro = false;
 
-	pos, hitchance = VP:GetPredictedPos(TargetSelector.target, 0.25, 2000, player, true)
+	pos, hitchance = VP:GetPredictedPos(TargetSelector.target, 0.25, 2000, myHero, true)
 	
-	if config.autoStarcall.starcallTowerDive == false and UnderTurret(player, true) == true and (hitchance ~= 0) then return end
+	if Menu.autoStarcall.starcallTowerDive == false and UnderTurret(myHero, true) == true and (hitchance ~= 0) then return end
 
 	if hitchance ~= 0 then
 		CastSpell(_E, pos.x, pos.z)
@@ -242,7 +243,7 @@ function GetPlayer(team, includeDead, includeSelf, distanceTo, distanceAmount, r
 		local member = heroManager:GetHero(i)
 
 		if member ~= nil and member.type == "AIHeroClient" and member.team == team and (member.dead ~= true or includeDead) then
-			if member.charName ~= player.charName or includeSelf then
+			if member.charName ~= myHero.charName or includeSelf then
 				if distanceAmount == GLOBAL_RANGE or member:GetDistance(distanceTo) <= distanceAmount then
 					if target == nil then target = member end
 
@@ -264,7 +265,7 @@ function GetPlayer(team, includeDead, includeSelf, distanceTo, distanceAmount, r
 end
 
 function buy()	
-	if InFountain() or player.dead then
+	if InFountain() or myHero.dead then
 			-- Item purchases
 		if GetTickCount() > lastBuy + buyDelay then
 			if GetInventorySlotItem(shopList[nextbuyIndex]) ~= nil then
@@ -281,45 +282,48 @@ end
 --draws Menu
 function drawMenu()
 	-- Config Menu
-	config = scriptConfig("UnifiedSoraka", "UnifiedSoraka")	
+	Menu = scriptConfig("UnifiedSoraka", "UnifiedSorakaa")	
 
-	config:addParam("enableScript", "Enable Script", SCRIPT_PARAM_ONOFF, true)
-	config:addParam("autoBuy", "Auto Buy Items", SCRIPT_PARAM_ONOFF, true)
-	config:addParam("autoLevel", "Auto Level", SCRIPT_PARAM_ONOFF, true)
+	Menu:addSubMenu("Common Options", "common");
+	
+	Menu.common:addParam("enableScript", "Enable Script", SCRIPT_PARAM_ONOFF, true)
+	Menu.common:addParam("autoBuy", "Auto Buy Items", SCRIPT_PARAM_ONOFF, true)
+	Menu.common:addParam("autoLevel", "Auto Level", SCRIPT_PARAM_ONOFF, true)
+	
+	
+	Menu:addSubMenu("Auto Heal", "autoHeal")
+	Menu:addSubMenu("Auto Starcall", "autoStarcall")
+	Menu:addSubMenu("Auto Equinox", "autoEquinox")
+	Menu:addSubMenu("Auto Ult", "autoUlt")
+	Menu:addSubMenu("Farming", "autoFarm")
 
-	config:addSubMenu("Auto Heal", "autoHeal")
-	config:addSubMenu("Auto Starcall", "autoStarcall")
-	config:addSubMenu("Auto Equinox", "autoEquinox")
-	config:addSubMenu("Auto Ult", "autoUlt")
-	config:addSubMenu("Farming", "autoFarm")
+	Menu.autoFarm:addParam("doFarm", "Allow minion attack", SCRIPT_PARAM_ONOFF, false)
 
-	config.autoFarm:addParam("doFarm", "Allow minion attack", SCRIPT_PARAM_ONOFF, false)
+	Menu.autoHeal:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
+	Menu.autoHeal:addParam("healThreshold", "Heal Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_HEAL_THRESHOLD, 0, 100, 0)
+	Menu.autoHeal:addParam("healMinMana", "Starcall Minimum Mana (%)", SCRIPT_PARAM_SLICE, DEFAULT_STARCALL_MIN_MANA, 0, 100, 0)
+	Menu.autoHeal:addParam("sorakaThreshold", "Soraka HP Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_HEAL_THRESHOLD, 5, 100, 0)
 
-	config.autoHeal:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
-	config.autoHeal:addParam("healThreshold", "Heal Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_HEAL_THRESHOLD, 0, 100, 0)
-	config.autoHeal:addParam("healMinMana", "Starcall Minimum Mana (%)", SCRIPT_PARAM_SLICE, DEFAULT_STARCALL_MIN_MANA, 0, 100, 0)
-	config.autoHeal:addParam("sorakaThreshold", "Soraka HP Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_HEAL_THRESHOLD, 5, 100, 0)
+	Menu.autoStarcall:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
+	Menu.autoStarcall:addParam("starcallTowerDive", "Starcall Under Towers", SCRIPT_PARAM_ONOFF, false)
+	Menu.autoStarcall:addParam("starcallMinMana", "Starcall Minimum Mana", SCRIPT_PARAM_SLICE, DEFAULT_STARCALL_MIN_MANA, 0, 100, 0)
 
-	config.autoStarcall:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
-	config.autoStarcall:addParam("starcallTowerDive", "Starcall Under Towers", SCRIPT_PARAM_ONOFF, false)
-	config.autoStarcall:addParam("starcallMinMana", "Starcall Minimum Mana", SCRIPT_PARAM_SLICE, DEFAULT_STARCALL_MIN_MANA, 0, 100, 0)
+	Menu.autoEquinox:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
+	Menu.autoEquinox:addParam("equinoxMinMana", "Equinox Min Mana", SCRIPT_PARAM_SLICE, DEFAULT_STARCALL_MIN_MANA, 0, 100, 0)
+	Menu.autoEquinox:addParam("equinoxTowerDive", "Equinox Under Towers", SCRIPT_PARAM_ONOFF, false)
 
-	config.autoEquinox:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
-	config.autoEquinox:addParam("equinoxMinMana", "Equinox Min Mana", SCRIPT_PARAM_SLICE, DEFAULT_STARCALL_MIN_MANA, 0, 100, 0)
-	config.autoEquinox:addParam("equinoxTowerDive", "Equinox Under Towers", SCRIPT_PARAM_ONOFF, false)
-
-	config.autoUlt:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
-	config.autoUlt:addParam("ultMode", "Ultimate Mode", SCRIPT_PARAM_LIST, DEFAULT_ULT_MODE, { "Selfish", "Lane Partner", "Entire Team" })
-	config.autoUlt:addParam("ultThreshold", "Ult Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_ULT_THRESHOLD, 0, 100, 0)
+	Menu.autoUlt:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
+	Menu.autoUlt:addParam("ultMode", "Ultimate Mode", SCRIPT_PARAM_LIST, DEFAULT_ULT_MODE, { "Selfish", "Lane Partner", "Entire Team" })
+	Menu.autoUlt:addParam("ultThreshold", "Ult Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_ULT_THRESHOLD, 0, 100, 0)
 	
 	TargetSelector = TargetSelector(TARGET_LOW_HP, 1000, DAMAGE_MAGIC, true)
 	TargetSelector.name = "Soraka"
-	config:addTS(TargetSelector)
+	Menu:addTS(TargetSelector)
 end
 
 function OnProcessSpell(unit,spell)
-	if not config.autoFarm.doFarm  and unit.name == player.name and spell.name:lower():find("attack") ~= nil then
-		if(spell.target.name:lower():find("minion")~=nil) then player:HoldPosition() end
+	if not Menu.autoFarm.doFarm  and unit.name == myHero.name and spell.name:lower():find("attack") ~= nil then
+		if(spell.target.name:lower():find("minion")~=nil) then myHero:HoldPosition() end
 	end
 end
 
@@ -327,7 +331,7 @@ end
 function OnCreateObj(obj)
 	-- Check if player is recalling and set isrecalling
 	if obj.name:find("TeleportHome") then
-		if GetDistance(player, obj) <= 70 then
+		if GetDistance(myHero, obj) <= 70 then
 			isRecalling = true
 		end
 	end
@@ -348,7 +352,7 @@ function OnTick()
 	
 	--if(ts.target) then print(ts.target.charName) end
 	-- Auto Level
-	if config.autoLevel and player.level > GetHeroLeveled() then
+	if Menu.autoLevel and myHero.level > GetHeroLeveled() then
 		LevelSpell(levelSequence[GetHeroLeveled() + 1])
 	end
 	
@@ -358,33 +362,32 @@ function OnTick()
 	end
 
 	-- Auto Ult (R)
-	if config.autoUlt.enabled and player:CanUseSpell(_R) == READY then
+	if Menu.autoUlt.enabled and myHero:CanUseSpell(_R) == READY then
 		doSorakaUlt()
 	end
 
-	if config.autoBuy then buy() end 
+	if Menu.autoBuy then buy() end 
 	
 	-- Only perform following tasks if not in fountain 
 	if not InFountain() then
 		-- Auto Heal and Deny Farm (W)
-		if player:CanUseSpell(_W) == READY and config.autoHeal.enabled  and (player.mana/player.maxMana) > config.autoHeal.healMinMana / 100  and player.health/player.maxHealth > config.autoHeal.sorakaThreshold/100 then
+		if myHero:CanUseSpell(_W) == READY and Menu.autoHeal.enabled  and (myHero.mana/myHero.maxMana) > Menu.autoHeal.healMinMana / 100  and myHero.health/myHero.maxHealth > Menu.autoHeal.sorakaThreshold/100 then
 			doSorakaHeal()
 		end
 		
 		--Auto Equinox (E)
-		if player:CanUseSpell(_E) == READY and config.autoEquinox.enabled and player.mana/player.maxMana > config.autoEquinox.equinoxMinMana/100 then
+		if myHero:CanUseSpell(_E) == READY and Menu.autoEquinox.enabled and myHero.mana/myHero.maxMana > Menu.autoEquinox.equinoxMinMana/100 then
 			doSorakaEquinox()
 		end
 
 		-- Auto StarCall (Q)
-		if config.autoStarcall.enabled and player:CanUseSpell(_Q) == READY and player.mana/player.maxMana  > config.autoStarcall.starcallMinMana/100 then
+		if Menu.autoStarcall.enabled and myHero:CanUseSpell(_Q) == READY and myHero.mana/myHero.maxMana  > Menu.autoStarcall.starcallMinMana/100 then
 			doSorakaStarcall()
 		end
 	end
 end
 
 function OnLoad()
-	player = GetMyHero()
 	drawMenu()
 	startingTime = GetTickCount()
 	
