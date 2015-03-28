@@ -1,4 +1,4 @@
-local version = "1.286"
+local version = "1.288"
 
 require "VPrediction"
 
@@ -264,7 +264,7 @@ function GetPlayer(team, includeDead, includeSelf, distanceTo, distanceAmount, r
 	return target
 end
 
-function buy()	
+function buy()
 	if InFountain() or myHero.dead then
 			-- Item purchases
 		if GetTickCount() > lastBuy + buyDelay then
@@ -274,6 +274,7 @@ function buy()
 			else
 				lastBuy = GetTickCount()
 				BuyItem(shopList[nextbuyIndex])
+				
 			end
 		end
 	end
@@ -348,11 +349,10 @@ end
 --[[ OnTick ]]--
 function OnTick()
 	-- Check if script should be run
-	--if not config.enableScript then return end
+	--if not Menu.common.enableScript then return end
 	
-	--if(ts.target) then print(ts.target.charName) end
 	-- Auto Level
-	if Menu.autoLevel and myHero.level > GetHeroLeveled() then
+	if Menu.common.autoLevel and myHero.level > GetHeroLeveled() then
 		LevelSpell(levelSequence[GetHeroLeveled() + 1])
 	end
 	
@@ -366,7 +366,7 @@ function OnTick()
 		doSorakaUlt()
 	end
 
-	if Menu.autoBuy then buy() end 
+	if Menu.common.autoBuy then buy() end 
 	
 	-- Only perform following tasks if not in fountain 
 	if not InFountain() then
