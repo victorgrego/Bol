@@ -1,4 +1,4 @@
-local version = "1.288"
+local version = "1.29"
 
 require "VPrediction"
 
@@ -397,7 +397,7 @@ function OnLoad()
 	
 	VP = VPrediction()
 	
-	if AutoUpdate then
+	--[[if AutoUpdate then
 		Update()
-	end
+	end]]
 end
