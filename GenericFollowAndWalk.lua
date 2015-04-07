@@ -1,4 +1,4 @@
-local version = "1.16"
+local version = "1.18"
 --[[
     Passive Follow by VictorGrego.
 ]]
