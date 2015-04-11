@@ -1,13 +1,18 @@
-class 'Node'
+class 'ListNode'
 
-function Node:__init(o)
-	self.next = o.next or nil
-	self.prev = o.prev or nil
-	self.value = o.value or nil
-	return o
+function ListNode:__init(o)
+	self.value = nil
+	self.next = nil
+	self.prev = nil
 end
 
-function Node:print()
+function ListNode:__eq(o, p)
+	if(o == nil or p == nil) then return false end
+	if(o.value == p.value and o.next == p.next and o.prev == p.prev) then return true end
+	return false
+end
+
+function ListNode:print()
 	if self.value == nil then 
 		print("Root or nil") 
 		return
@@ -19,39 +24,58 @@ end
 class 'List'
 
 function List:__init(o)
-	self.root = Node()
+	self.root = ListNode()
 	
 	self.root.next = self.root
 	self.root.prev = self.root
-	return o
+	self.root.value = -1
+	self.len = 0
+end
+
+function List:__len()
+	return self.len
+end
+
+function List:iterate()
+	local i = self.root
+	return function()
+		i = i.next
+		if i ~= self.root then return i.value end 
+	end
 end
 
 function List:getFirst()
-	return root.next
+	return self.root.next.value
 end
 
 function List:getLast()
-	return root.prev
+	return self.root.prev.value
+end
+
+function List:isEmpty()
+	return self.root.next == self.root
 end
 
 function List:insertLast(o)
-	element = Node()
+	element = ListNode()
 	element.value = o
 	
 	element.prev = self.root.prev
 	self.root.prev = element
 	element.next = self.root
 	element.prev.next = element
+	self.len = self.len + 1
 end
 
 function List:insertFirst(o)
-	element = Node()
+	element = ListNode()
 	element.value = o
 	
 	element.next = self.root.next
 	self.root.next = element
 	element.prev = self.root
 	element.next.prev = element
+	self.len = self.len + 1
 end
 
 function List:removeElement(o)
@@ -61,6 +85,7 @@ function List:removeElement(o)
         if(i.value == o) then
             i.prev.next = i.next
             i.next.prev = i.prev
+			self.len = self.len - 1
             return i.value
         end
         i = i.next
@@ -86,22 +111,26 @@ function List:removeFirst()
 	
 	self.root.next = self.root.next.next
 	self.root.next.prev = self.root
+	self.len = self.len - 1
 	
 	return result.value
 end
 
 function List:removeLast()
+
 	result = self.root.prev
 	if(result == nil) then return nil end
 	
 	self.root.prev = self.root.prev.prev
 	self.root.prev.next = self.root
+	self.len = self.len - 1
 	
 	return result
 end
 
-function List:print()
-	i = self.root.next
+function List:print()	
+	local i = self.root.next
+	
 	while i ~= self.root do
 		i:print()
 		i = i.next
