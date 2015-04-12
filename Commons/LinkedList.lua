@@ -1,3 +1,58 @@
+--[[
+List Class by ViktorGrego
+
+I've implemented a simple data structure for personal use, but I've decided to share in case of study or personal use. Any Questions just pm me.
+
+-----
+
+ListNode Class
+Properties:
++ value: any element to be stored in the list
+
+Methods:
++print: prints the value contained in the list node
+
+-----
+
+List Class
+Properties:
+-None
+
+Methods:
++iterate: Iterates through the List
+Example Code:
+for v in myList:iterate() do
+	v:print()
+end
+
++getFirst(): Returns the FIRST element from the list. 
+Example: from 1>5>6>7 it will return 1
+
++getLast(): Returns the LAST element from the list
+Example: from 1>5>6>7 it will return 7
+
++insertFirst(o): inserts the a element in the FIRST position of the list
+Example: if list is 1>5>6>7 and we run insertFirst(0) the final list is: 0>1>5>6>7
+
++insertLast(o): inserts the a element in the LAST position of the list
+Example: if list is 1>5>6>7 and we run insertFirst(0) the final list is: 1>5>6>7>0
+
++isEmpty(): returns true if the list has no elements
+
++removeElement(o): removes the element from the list if it exists, if not returns nil
+Example: if list is 1>5>6>7 and we run removeElement(6) the final list is: 1>5>7
+
++removeFirst(): removes the FIRST element from list
+if list is 1>5>6>7 and we run removeFirst() the final list is: 5>6>7
+
++removeLast(): removes the LAST element from list
+if list is 1>5>6>7 and we run removeLast() the final list is: 1>5>6
+
++contains(o): returns true if element o exists in the list
+
++print(): prints the list 
+]]
+
 class 'ListNode'
 
 function ListNode:__init(o)
