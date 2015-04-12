@@ -26,7 +26,7 @@ function initVariables()
 	EnemyMinions = minionManager(MINION_ENEMY, 10000, myHero, MINION_SORT_HEALTH_ASC)
 	AllyMinions = minionManager(MINION_ALLY, 10000, myHero, MINION_SORT_HEALTH_DEC)
 	
-	myTrueRange = myHero.range + GetDistance(myHero.minBBox)
+	myTrueRange = myHero.range + myHero.boundingRadius-3
 	
 	print("Walker Loaded!!!")
 	player = GetMyHero()
@@ -39,7 +39,7 @@ local lastAttack, lastWindUpTime, lastAttackCD = 0, 0, 0
 local myTrueRange = 0
 local myTarget = nil
 -------/Orbwalk info------
-ts = TargetSelector(TARGET_LOW_HP, myTrueRange, DAMAGE_MAGIC, true)
+ts = TargetSelector(TARGET_LOW_HP, myTrueRange)
 
 -- CELL ANALYSIS AREA
 class 'Cell'
@@ -76,6 +76,8 @@ end
 -- END OF CELL ANALYSIS AREA
 
 function OnDraw()
+	DrawCircle3D(myHero.x, myHero.y, myHero.z, myTrueRange, 1, 0xffffffff, 8 )
+
 	for v in Grid:iterate() do
 		if v ~= nil then
 			if Menu.common.drawCenters then DrawCircle3D(v.center.x, 0, v.center.z, RESOLUTION/2, 1, 0xffffff00, 8 ) end
@@ -293,10 +295,9 @@ function chooseBestPosition()
 			bestPoint = v
 			currentDist = GetDistance(v.center, Vector(0,0))
 		end
-		
 	end
 	
-	if bestPoint ~= nil then player:MoveTo(bestPoint.center.x, bestPoint.center.z) end
+	if bestPoint ~= nil and heroCanMove() then player:MoveTo(bestPoint.center.x, bestPoint.center.z) end
 end
 
 -- END OF IM UPDATE AREA
@@ -315,7 +316,8 @@ function timeToShoot()
 end 
 
 function _OrbWalk()
-	if ts.target ~= nil then myTarget = ts.target end
+	if ts.target ~= nil then print(ts.target) 
+	myTarget = ts.target end
 	if myTarget ~=nil and GetDistance(myTarget) <= myTrueRange then		
 		if timeToShoot() then
 			player:Attack(myTarget)
@@ -351,6 +353,7 @@ end
 --
 
 function OnTick()
+	ts.range = myHero.range + myHero.boundingRadius - 3
 	ts:update()
 	_OrbWalk()
 	updateInfluenceMap()
