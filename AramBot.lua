@@ -12,6 +12,7 @@ function initVariables()
 	ENEMY_CHAMP_WEIGHT = 10
 	ALLY_CHAMP_WEIGHT = -10
 	MINION_WEIGHT = 1
+	MINION_RANGE = 500
 	MINION_INFLUENCE_RANGE = 500
 	LOOSE = 50
 	BONUS = 5
@@ -19,7 +20,7 @@ function initVariables()
 	TOWER_WEIGHT = 100
 	TOWER_DISCOUNT = 100
 	
-	RESOLUTION = 200
+	RESOLUTION = 175
 	SQRT2RES = math.sqrt(2) * RESOLUTION + 3
 	Grid = List()
 	
@@ -39,7 +40,7 @@ local lastAttack, lastWindUpTime, lastAttackCD = 0, 0, 0
 local myTrueRange = 0
 local myTarget = nil
 -------/Orbwalk info------
-ts = TargetSelector(TARGET_LOW_HP, myTrueRange)
+ts = TargetSelector(TARGET_LOW_HP_PRIORITY, myTrueRange + 50)
 
 -- CELL ANALYSIS AREA
 class 'Cell'
@@ -179,6 +180,10 @@ function GetTowers(team)
 	end
 end
 
+function getPercentHealth(unit)
+	return unit.health/unit.maxHealth*100
+end
+
 --
 --	END OF UTIL FUNCTIONS
 --
@@ -199,9 +204,9 @@ function updateMinions(j)
 		
 		local maxDist = 2* myHero.range
 		
-		if dist < myHero.range - LOOSE then j.weight = math.max(dist, j.weight)
+		if dist < myHero.range - LOOSE then j.weight = math.max(dist + (100 - getPercentHealth(v))), j.weight
 		--elseif dist > myHero.range + LOOSE and dist < maxDist then j.weight = j.weight + (maxDist - dist)
-		else j.weight = math.max (myHero.range + BONUS, j.weight) end
+		else j.weight = math.max (myHero.range + BONUS + (100 - getPercentHealth(v)), j.weight) end
 		j.weight = math.floor(j.weight)
 		
 		::continue::
@@ -216,11 +221,13 @@ function updateMinions(j)
 		local dist = GetDistance(j.center, v)
 		if dist > myHero.range + LOOSE then goto continue end 
 		
-		local maxDist = 2* myHero.range
-		if dist < myHero.range - LOOSE then j.weight = math.max(MINION_RANGE - GetDistance(j.center, v), j.weight)
+		
+		if dist <= myHero.range then 
+			j.weight = math.max(GetDistance(j.center, v), j.weight) 
+			j.weight = math.floor(j.weight)
+		end
 		--elseif dist > myHero.range + LOOSE and dist < maxDist then j.weight = j.weight + (maxDist - dist)
-		else j.weight = math.max (myHero.range + BONUS, j.weight) end
-		j.weight = math.floor(j.weight)
+		
 		
 		::continue::
 	end
@@ -248,7 +255,21 @@ end
 
 function updateTowers(i, allies, enemies)
 		for j in enemies:iterate() do
-			if GetDistance(i.center, j) < TOWER_RANGE then i.weight = math.min(math.floor(TOWER_RANGE - GetDistance(i.center, j)) * -1, i.weight) end
+			local dist = GetDistance(i.center, j)
+			if dist > TOWER_RANGE then goto continue end
+			local haveAllyMinion = false
+			for _, v in ipairs(AllyMinions.objects) do
+				if GetDistance(j,v) < TOWER_RANGE then 
+					haveAllyMinion = true
+					break
+				end
+			end
+			if(haveAllyMinion) then 
+				i.weight = math.max(math.floor(dist), i.weight)
+			else
+				 i.weight = math.min(math.floor(TOWER_RANGE - GetDistance(i.center, j)) * -1, i.weight) 
+			end
+			::continue::
 		end
 		
 		for j in allies:iterate() do
@@ -262,18 +283,20 @@ function updateInfluenceMap()
 	local allies = GetTowers(player.team)
 	local enemies = GetTowers(TEAM_ENEMY)
 	EnemyMinions:update()
+	AllyMinions:update()
 	
 	for u in Grid:iterate() do
 		u.weight = 0
 	end
 	
 	for u in Grid:iterate() do
-		updateTowers(u,allies,enemies)
 		updateMinions(u)
+		updateTowers(u,allies,enemies)
 	end
 end
 
 function chooseBestPosition()
+	if not heroCanMove then return end
 	local bestPoint = nil
 	local possibilities = List()
 	if(Grid:isEmpty()) then return end
@@ -297,7 +320,7 @@ function chooseBestPosition()
 		end
 	end
 	
-	if bestPoint ~= nil and heroCanMove() then player:MoveTo(bestPoint.center.x, bestPoint.center.z) end
+	if bestPoint ~= nil then player:MoveTo(bestPoint.center.x, bestPoint.center.z) end
 end
 
 -- END OF IM UPDATE AREA
