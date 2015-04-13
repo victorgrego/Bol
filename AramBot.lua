@@ -5,6 +5,9 @@
 ]]
 
 require 'LinkedList'
+require 'AutoLevel'
+require 'AutoBuy'
+require 'AutoCombo'
 
 function initVariables()
 	min = gamestate.map.min
@@ -15,23 +18,30 @@ function initVariables()
 	MINION_RANGE = 500
 	MINION_INFLUENCE_RANGE = 500
 	LOOSE = 50
+	TOWER_LOOSE = 20
 	BONUS = 5
-	TOWER_RANGE = 780
-	TOWER_WEIGHT = 100
+	TOWER_RANGE = 950
+	TOWER_WEIGHT = 200
 	TOWER_DISCOUNT = 100
 	
-	RESOLUTION = 175
+	myFountain = GetFountain()
+	
+	RESOLUTION = 150
 	SQRT2RES = math.sqrt(2) * RESOLUTION + 3
 	Grid = List()
 	
 	EnemyMinions = minionManager(MINION_ENEMY, 10000, myHero, MINION_SORT_HEALTH_ASC)
+	EnemyMinionsFarm = minionManager(MINION_ENEMY, myHero.range, myHero, MINION_SORT_HEALTH_ASC)
 	AllyMinions = minionManager(MINION_ALLY, 10000, myHero, MINION_SORT_HEALTH_DEC)
 	
 	myTrueRange = myHero.range + myHero.boundingRadius-3
 	
+	yikesTurret = nil
+	
 	print("Walker Loaded!!!")
 	player = GetMyHero()
 end
+
 --Values DO NOT CHANGE
 SCRIPT_START_TIME = 0
 WALK_ERROR = 300
@@ -39,6 +49,8 @@ WALK_ERROR = 300
 local lastAttack, lastWindUpTime, lastAttackCD = 0, 0, 0
 local myTrueRange = 0
 local myTarget = nil
+local myMinion = nil
+local myTower = nil
 -------/Orbwalk info------
 ts = TargetSelector(TARGET_LOW_HP_PRIORITY, myTrueRange + 50)
 
@@ -57,11 +69,7 @@ function Cell:__eq(o,p)
 end
 
 function Cell:inside(pos)
-	--print("tryInside")
 	local halfRes = RESOLUTION/2
-	--print("Champ pos "..pos.x.." Cell MIN MAX "..(self.center.x -  halfRes).." "..(self.center.x + halfRes))
-	--if VectorType(self.center) then print("true") end 
-	--print("Champ pos "..pos.z.." Cell pos "..(self.center.z +  halfRes))
 	if pos.x > self.center.x - halfRes and pos.x < self.center.x + halfRes then
 		if pos.z > self.center.z - halfRes and pos.z < self.center.z + halfRes then
 			return true
@@ -76,29 +84,8 @@ end
 
 -- END OF CELL ANALYSIS AREA
 
-function OnDraw()
-	DrawCircle3D(myHero.x, myHero.y, myHero.z, myTrueRange, 1, 0xffffffff, 8 )
-
-	for v in Grid:iterate() do
-		if v ~= nil then
-			if Menu.common.drawCenters then DrawCircle3D(v.center.x, 0, v.center.z, RESOLUTION/2, 1, 0xffffff00, 8 ) end
-			--DrawRectangleOutline(v.center.x, v.center.y, RESOLUTION, RESOLUTION, 0xffffffff, 10)
-			if Menu.common.drawNeighbors then
-				for u in v.neighbors:iterate() do
-					DrawLine3D(v.center.x, 0, v.center.z, u.center.x, 0, u.center.z, 1, 0xffff00ff)
-				end
-			end
-			if Menu.common.drawText then
-				DrawText3D(tostring(v.weight), v.center.x, 0, v.center.z, 12, 0xffffff00, true)
-			end
-		end
-	end
-end
-
 -- STARTS THE GRID AT GAME START
 function GenerateGrid()
-	
-	
 	print(min.x)
 	print(min.y)
 	print(max.x)
@@ -180,8 +167,45 @@ function GetTowers(team)
 	end
 end
 
+function GetCloseTower(hero, team)
+	local towers = GetTowers(team)
+	if #towers > 0 then
+		local candidate = towers:getFirst()
+		for i in towers:iterate() do
+			if (i.health/i.maxHealth > 0.1) and  GetDistance(candidate, hero) > GetDistance(i, hero) then candidate = i end
+		end
+		return candidate
+	else
+		return false
+	end
+end
+
 function getPercentHealth(unit)
 	return unit.health/unit.maxHealth*100
+end
+
+function GetNextEnemyTower()
+	local NextEnemyTower, dist 
+	for i=1, objManager.maxObjects, 1 do
+		local tower = objManager:getObject(i)
+		if tower ~= nil and (tower.type == "obj_AI_Turret" or tower.type == "obj_HQ"--[[ or tower.name == "Order_Inhibit_Gem.troy" or tower.name == "Chaos_Inhibit_Gem.troy"]]) and ValidTarget(tower) then	
+			if not NextEnemyTower then
+				NextEnemyTower = tower
+				dist = GetDistance(tower)
+			else
+				local tD = GetDistance(tower)
+				if tD < dist then
+					NextEnemyTower, dist = tower, tD			
+				end
+			end			
+		end
+	end
+	if NextEnemyTower then
+		AllyMinionsAround = minionManager(MINION_ALLY, 1000, NextEnemyTower, MINION_SORT_HEALTH_ASC)
+		if AllyMinionsAround.iCount >= 1 then
+			return NextEnemyTower
+		end		
+	end		
 end
 
 --
@@ -202,11 +226,13 @@ function updateMinions(j)
 		local dist = GetDistance(j.center, v)
 		if dist > myHero.range + LOOSE then goto continue end 
 		
-		local maxDist = 2* myHero.range
+		local tfDist = GetDistance(v, myFountain)
+		local pfDist = GetDistance(j.center, myFountain)
+		local w = tfDist / pfDist
 		
-		if dist < myHero.range - LOOSE then j.weight = math.max(dist + (100 - getPercentHealth(v))), j.weight
+		if dist < myHero.range - LOOSE then j.weight = math.max(w*(dist + (100 - getPercentHealth(v))), j.weight)
 		--elseif dist > myHero.range + LOOSE and dist < maxDist then j.weight = j.weight + (maxDist - dist)
-		else j.weight = math.max (myHero.range + BONUS + (100 - getPercentHealth(v)), j.weight) end
+		else j.weight = math.max (w*(myHero.range + BONUS + (100 - getPercentHealth(v))), j.weight) end
 		j.weight = math.floor(j.weight)
 		
 		::continue::
@@ -255,25 +281,43 @@ end
 
 function updateTowers(i, allies, enemies)
 		for j in enemies:iterate() do
+			
 			local dist = GetDistance(i.center, j)
+			
+			local tfDist = GetDistance(j, myFountain)
+			local pfDist = GetDistance(i.center, myFountain)
+			local w = tfDist / pfDist
 			if dist > TOWER_RANGE then goto continue end
+			
 			local haveAllyMinion = false
+			
 			for _, v in ipairs(AllyMinions.objects) do
-				if GetDistance(j,v) < TOWER_RANGE then 
+				if GetDistance(j,v) < 850 then 
 					haveAllyMinion = true
 					break
 				end
 			end
+			
 			if(haveAllyMinion) then 
-				i.weight = math.max(math.floor(dist), i.weight)
+				if dist < myHero.range then
+					i.weight =  math.floor(w * dist) 
+				else--if dist < myHero.range + LOOSE then 
+					i.weight = math.floor(w*(TOWER_RANGE - dist))
+				--else
+				--	i.weight = math.floor(w*(myHero.range + 50))
+				end
 			else
-				 i.weight = math.min(math.floor(TOWER_RANGE - GetDistance(i.center, j)) * -1, i.weight) 
+				 if dist > 300 then 
+				 --[[i.weight = math.min(math.floor(TOWER_RANGE - GetDistance(i.center, j)) * -1, i.weight)]] 
+					i.weight = -TOWER_RANGE
+				 end 
 			end
 			::continue::
 		end
 		
 		for j in allies:iterate() do
-			if GetDistance(i.center, j) < TOWER_RANGE then i.weight = math.max(math.floor(TOWER_RANGE - GetDistance(i.center, j)) - TOWER_DISCOUNT, i.weight) end
+			local dist = GetDistance(i.center, j)
+			if dist < TOWER_RANGE and dist > 300 then i.weight = math.max(math.floor(TOWER_RANGE - GetDistance(i.center, j)) - TOWER_DISCOUNT, i.weight) end
 		end
 end
 
@@ -284,6 +328,12 @@ function updateInfluenceMap()
 	local enemies = GetTowers(TEAM_ENEMY)
 	EnemyMinions:update()
 	AllyMinions:update()
+	
+	myTrueRange = myHero.range + myHero.boundingRadius - 3
+	ts.range = myTrueRange
+	EnemyMinionsFarm.range = myTrueRange
+	ts:update()
+	EnemyMinionsFarm:update()
 	
 	for u in Grid:iterate() do
 		u.weight = 0
@@ -296,7 +346,6 @@ function updateInfluenceMap()
 end
 
 function chooseBestPosition()
-	if not heroCanMove then return end
 	local bestPoint = nil
 	local possibilities = List()
 	if(Grid:isEmpty()) then return end
@@ -314,7 +363,7 @@ function chooseBestPosition()
 	local currentDist = 9999999
 	for v in possibilities:iterate() do
 		if(bestPoint == nil) then bestPoint = v 
-		elseif GetDistance(v.center, Vector(0,0)) < currentDist then
+		elseif GetDistance(v.center, myFountain) < currentDist then
 			bestPoint = v
 			currentDist = GetDistance(v.center, Vector(0,0))
 		end
@@ -329,7 +378,6 @@ end
 -- ORBWALKER
 --
 
-
 function heroCanMove()
 	return (GetTickCount() + GetLatency()/2 > lastAttack + lastWindUpTime + 20)
 end 
@@ -339,62 +387,84 @@ function timeToShoot()
 end 
 
 function _OrbWalk()
-	if ts.target ~= nil then print(ts.target) 
-	myTarget = ts.target end
-	if myTarget ~=nil and GetDistance(myTarget) <= myTrueRange then		
+	local RealTarget = ValidTarget(myTarget) and myTarget or myTower or myMinion
+	if RealTarget ~= nil and GetDistance(RealTarget) <= myTrueRange then
 		if timeToShoot() then
-			player:Attack(myTarget)
+			player:Attack(RealTarget)
+			return
 		elseif heroCanMove() then
 			chooseBestPosition()
+			return
 		end
-	else		
+	elseif heroCanMove() then		
 		chooseBestPosition()
+		return
 	end
-end
-
-function OnProcessSpell(object, spell)
-	if object == myHero then
-		if spell.name:lower():find("attack") then
-			lastAttack = GetTickCount() - GetLatency()/2
-			lastWindUpTime = spell.windUpTime*1000
-			lastAttackCD = spell.animationTime*1000
-		end 
-	end
-end
-
-function OnTick()
-	--walker:update()
-	
-end
-
-function OnLoad()
-	
 end
 
 --
 -- END OF ORBWALKER
 --
 
+--
+-- COMMON FUNCTIONS
+--
+
+function OnProcessSpell(object, spell)
+	if object.type == "obj_AI_Turret" and spell.name:lower():find("attack") and spell.target == player then 
+		yikesTurret = GetCloseTower(myHero, TEAM_ENEMY)
+	elseif object == myHero then
+		if spell.name:lower():find("attack") then
+			lastAttack = (GetTickCount() - GetLatency()/2) + 25
+			lastWindUpTime = spell.windUpTime*1000
+			lastAttackCD = spell.animationTime*1000
+		end 
+	end
+end
+
+function OnDraw()
+	DrawCircle3D(myHero.x, myHero.y, myHero.z, myTrueRange, 1, 0xffffffff, 8 )
+	DrawCircle3D(GetFountain().x, GetFountain().y, GetFountain().z, myTrueRange, 1, 0xffffffff, 8 )
+	for v in Grid:iterate() do
+		if v ~= nil then
+			if Menu.common.drawCenters then DrawCircle3D(v.center.x, 0, v.center.z, RESOLUTION/2, 1, 0xffffff00, 8 ) end
+			if Menu.common.drawNeighbors then
+				for u in v.neighbors:iterate() do
+					--DrawLine3D(v.center.x, 0, v.center.z, u.center.x, 0, u.center.z, 1, 0xffff00ff)
+					--OnScreen(u, v)
+				end
+			end
+			if Menu.common.drawText then
+				DrawText3D(tostring(v.weight), v.center.x, 0, v.center.z, 12, 0xffffff00, true)
+			end
+		end
+	end
+end
+
 function OnTick()
-	ts.range = myHero.range + myHero.boundingRadius - 3
-	ts:update()
-	_OrbWalk()
+	if yikesTurret ~= nil then
+		local followX = (2 * myHero.x) - yikesTurret.x
+		local followZ = (2 * myHero.z) - yikesTurret.z
+		player:MoveTo(followX, followZ)
+		if GetDistance(yikesTurret, myHero) > 1000 then yikesTurret = nil end
+		return
+	end
 	updateInfluenceMap()
-	--chooseBestPosition()
+	myTarget, myMinion, myTower = ts.target, EnemyMinionsFarm.objects[1], GetNextEnemyTower()
+	_OrbWalk()	
 end
 
 function OnLoad()
-	
 	gamestate = GetGame()
 	initVariables()
 	drawMenu()
-	Menu = scriptConfig("Passive Follow", "Passive Follow") 
+	Menu = scriptConfig("AramBot", "AramBot") 
 	
 	Menu:addSubMenu("Commons", "common")
 	
-	Menu.common:addParam("drawNeighbors", "Draw Neighbors", SCRIPT_PARAM_ONOFF, true)
-	Menu.common:addParam("drawCenters", "Draw Cell Centers", SCRIPT_PARAM_ONOFF, true)
-	Menu.common:addParam("drawText", "Draw Weights", SCRIPT_PARAM_ONOFF, true)
+	Menu.common:addParam("drawNeighbors", "Draw Neighbors", SCRIPT_PARAM_ONOFF, false)
+	Menu.common:addParam("drawCenters", "Draw Cell Centers", SCRIPT_PARAM_ONOFF, false)
+	Menu.common:addParam("drawText", "Draw Weights", SCRIPT_PARAM_ONOFF, false)
 	GenerateGrid()
 	
 end
