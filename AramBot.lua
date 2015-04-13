@@ -24,15 +24,18 @@ function initVariables()
 	TOWER_WEIGHT = 200
 	TOWER_DISCOUNT = 100
 	
-	myFountain = GetFountain()
+	RECALCULATION_DELAY = 200
+	LAST_RECALCULATION = 0
+	
+	myFountain = myGetFountain()
 	
 	RESOLUTION = 150
 	SQRT2RES = math.sqrt(2) * RESOLUTION + 3
 	Grid = List()
 	
-	EnemyMinions = minionManager(MINION_ENEMY, 10000, myHero, MINION_SORT_HEALTH_ASC)
+	EnemyMinions = minionManager(MINION_ENEMY, 20000, myHero, MINION_SORT_HEALTH_ASC)
 	EnemyMinionsFarm = minionManager(MINION_ENEMY, myHero.range, myHero, MINION_SORT_HEALTH_ASC)
-	AllyMinions = minionManager(MINION_ALLY, 10000, myHero, MINION_SORT_HEALTH_DEC)
+	AllyMinions = minionManager(MINION_ALLY, 20000, myHero, MINION_SORT_HEALTH_DEC)
 	
 	myTrueRange = myHero.range + myHero.boundingRadius-3
 	
@@ -208,6 +211,12 @@ function GetNextEnemyTower()
 	end		
 end
 
+function myGetFountain()
+	if player.team == TEAM_BLUE then return GetFountain() 
+	else return Vector(12184, 0, 11844)
+	end
+end
+
 --
 --	END OF UTIL FUNCTIONS
 --
@@ -289,27 +298,27 @@ function updateTowers(i, allies, enemies)
 			local w = tfDist / pfDist
 			if dist > TOWER_RANGE then goto continue end
 			
-			local haveAllyMinion = false
-			
+			local allMinCount = 0
 			for _, v in ipairs(AllyMinions.objects) do
 				if GetDistance(j,v) < 850 then 
-					haveAllyMinion = true
-					break
+					allMinCount = allMinCount + 1
 				end
 			end
 			
-			if(haveAllyMinion) then 
+			if(allMinCount >= 2) then 
 				if dist < myHero.range then
 					i.weight =  math.floor(w * dist) 
 				else--if dist < myHero.range + LOOSE then 
-					i.weight = math.floor(w*(TOWER_RANGE - dist))
+					i.weight = math.floor(2*w*(TOWER_RANGE - dist))
 				--else
 				--	i.weight = math.floor(w*(myHero.range + 50))
 				end
 			else
-				 if dist > 300 then 
+				 if dist > 400 then 
 				 --[[i.weight = math.min(math.floor(TOWER_RANGE - GetDistance(i.center, j)) * -1, i.weight)]] 
 					i.weight = -TOWER_RANGE
+				else
+					i.weight = -999999
 				 end 
 			end
 			::continue::
@@ -317,7 +326,7 @@ function updateTowers(i, allies, enemies)
 		
 		for j in allies:iterate() do
 			local dist = GetDistance(i.center, j)
-			if dist < TOWER_RANGE and dist > 300 then i.weight = math.max(math.floor(TOWER_RANGE - GetDistance(i.center, j)) - TOWER_DISCOUNT, i.weight) end
+			if dist < TOWER_RANGE and dist > 400 then i.weight = math.max(math.floor(TOWER_RANGE - GetDistance(i.center, j)) - TOWER_DISCOUNT, i.weight) end
 		end
 end
 
@@ -335,13 +344,17 @@ function updateInfluenceMap()
 	ts:update()
 	EnemyMinionsFarm:update()
 	
-	for u in Grid:iterate() do
-		u.weight = 0
-	end
-	
-	for u in Grid:iterate() do
-		updateMinions(u)
-		updateTowers(u,allies,enemies)
+	if GetTickCount() > LAST_RECALCULATION + RECALCULATION_DELAY then 
+		
+		for u in Grid:iterate() do
+			u.weight = 0
+		end
+		
+		for u in Grid:iterate() do
+			updateMinions(u)
+			updateTowers(u,allies,enemies)
+		end
+		LAST_RECALCULATION = GetTickCount()
 	end
 end
 
@@ -424,7 +437,7 @@ end
 
 function OnDraw()
 	DrawCircle3D(myHero.x, myHero.y, myHero.z, myTrueRange, 1, 0xffffffff, 8 )
-	DrawCircle3D(GetFountain().x, GetFountain().y, GetFountain().z, myTrueRange, 1, 0xffffffff, 8 )
+	DrawCircle3D(myGetFountain().x, myGetFountain().y, myGetFountain().z, myTrueRange, 1, 0xffffffff, 8 )
 	for v in Grid:iterate() do
 		if v ~= nil then
 			if Menu.common.drawCenters then DrawCircle3D(v.center.x, 0, v.center.z, RESOLUTION/2, 1, 0xffffff00, 8 ) end
