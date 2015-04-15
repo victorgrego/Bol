@@ -1,4 +1,4 @@
-local version = "1.02"
+local version = "1.04"
 --[[
 
 --]]
@@ -323,7 +323,7 @@ function OnLoad()
 	VP = VPrediction()
 	myTrueRange = myHero.range + GetDistance(myHero.minBBox)
 	
-	if AutoUpdate then
+	--[[if AutoUpdate then
 		Update()
-	end
+	end]]
 end
