@@ -1,4 +1,4 @@
-local version = "1.18"
+local version = "1.19"
 --[[
     Passive Follow by VictorGrego.
 ]]
@@ -500,7 +500,7 @@ function OnDraw()
 end
 
 function OnTick()
-
+	if #allies < 5 then allies = GetPlayers(player.team, true, false) end
 	if(config.enableScript)then
 		root:run()
 	end
