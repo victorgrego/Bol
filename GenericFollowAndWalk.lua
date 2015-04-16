@@ -1,4 +1,4 @@
-local version = "1.19"
+local version = "1.2"
 --[[
     Passive Follow by VictorGrego.
 ]]
@@ -10,6 +10,7 @@ SetupDrawX = 0.1
 SetupDrawY = 0.15
 MenuTextSize = 18
 allies = {}
+preferences = {FOLLOW_PARTNER = 0, GO_BASE = 0}
 
 --UPDATE SETTINGS
 local AutoUpdate = true
@@ -53,8 +54,45 @@ function UpdateCallback()
 	end
 end
 
+function initVariables()
+	
+	bottomPoint = Vector(12100, 2100)
+	--summoners
+	DEFAULT_FOLLOW_DISTANCE = 400
+	DEFAULT_MANA_REGEN = 80
+	DEFAULT_HP_REGEN = 80
+
+	--CONSTANTS
+	MIN_DISTANCE = 275
+	HEAL_DISTANCE = 700
+	DEFAULT_HEALTH_THRESHOLD = 70
+	DEFAULT_MANA_THRESHOLD = 66
+
+	AFK_MAXTIME = 60
+	SCRIPT_START_TIME = os.clock() + 60 -- change the adc selecting time
+	lastPartnerMove = nil
+	
+	FocusOfTower = false
+	partner = nil
+	temp_partner = nil
+	pAfk = true
+	pRecalling = false -- is Partner Recalling?
+	meRecalling = false
+	yikesTurret = nil
+	collectTimer = true
+
+	-- spawn
+	allySpawn = nil
+	enemySpawn = nil
+	
+	--Behavior tree root
+	root = nil
+
+	detectSpawnPoints()
+end
+
 --Classes Area
-root = nil
+
 --Task Class
 Task = {}
 function Task:new(o)
@@ -142,7 +180,7 @@ function Action:run()
 	end
 	
 	actions["partnerClose"] = function()
-		if player:GetDistance(partner) <= config.followChamp.followDist then return true
+		if GetDistance(partner,player) <= config.followChamp.followDist then return true
 		else return false
 		end
 	end
@@ -156,17 +194,17 @@ function Action:run()
 		local friends = GetPlayers(player.team, false, false)
 		local closest = friends[1]
 		for i = 1, #friends, 1 do
-			if friends[i] ~= nil and player:GetDistance(friends[i]) < player:GetDistance(closest) then closest = friends[i] end
+			if friends[i] ~= nil and GetDistance(friends[i], player) < GetDistance(closest,player) then closest = friends[i] end
 		end
 		
-		if closest ~= nil and player:GetDistance(closest) <= config.followChamp.followDist then return true
+		if closest ~= nil and GetDistance(closest, player) <= config.followChamp.followDist then return true
 		else return false
 		end
 	end
 	
 	actions["inTurret"] = function()
 		local myTurret = GetCloseTower(player, player.team)
-		if player:GetDistance(myTurret) <= config.followChamp.followDist and player:GetDistance(allySpawn) < GetDistance(allySpawn, myTurret) then return true
+		if GetDistance(myTurret, player) <= config.followChamp.followDist and GetDistance(allySpawn, player) < GetDistance(allySpawn, myTurret) then return true
 		else return false
 		end
 	end
@@ -214,7 +252,7 @@ function Action:run()
 	actions["isRecalling"] = function()
 		for i=1, objManager.maxObjects, 1 do
 			local obj = objManager:getObject(i)
-			if obj ~= nil and obj.valid and obj.name:find("TeleportHome") ~= nil and player:GetDistance(obj) < 70 then
+			if obj ~= nil and obj.valid and GetDistance(myHero, obj) < 50 and obj.name:lower():find("teleporthome") then
 				return true
 			end
 		end
@@ -222,6 +260,7 @@ function Action:run()
 	end
 	
 	actions["followPartner"] = function()
+	
 		followX = ((allySpawn.x - partner.x)/(partner:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + partner.x + math.random(-((config.followChamp.followDist-300)/3),((config.followChamp.followDist-300)/3)))
 		followZ = ((allySpawn.z - partner.z)/(partner:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + partner.z + math.random(-((config.followChamp.followDist-300)/3),((config.followChamp.followDist-300)/3)))
 			
@@ -235,11 +274,13 @@ function Action:run()
 		followX = (allySpawn.x - myTurret.x)/(myTurret:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + myTurret.x
 		followZ = (allySpawn.z - myTurret.z)/(myTurret:GetDistance(allySpawn)) * ((config.followChamp.followDist - 300) / 2 + 300) + myTurret.z
 		player:MoveTo(math.floor(followX), math.floor(followZ))
-			
-		return true
+		if(GetDistance(Vector(followX, followZ), player) < 30) then return true end
+		return false
 	end
 	
 	actions["towerFocusPlayer"] = function()
+		if FocusOfTower and GetDistance(yikesTurret, player) > 1000 then FocusOfTower = false end
+	
 		return FocusOfTower
 	end
 	
@@ -439,46 +480,25 @@ function mountBehaviorTree()
 	sequence8:addChild(recall)
 end
 
-function OnRecall(hero, channelTimeInMs)
-    if hero.isMe then
-        meRecalling = true
-	elseif hero.name == partner.name then
-		pRecalling = true
-    end
-end
-
-function OnAbortRecall(hero)
-    if hero.isMe then
-        meRecalling = false
-	elseif hero.name == partner.name then
-		pRecalling = false
-    end        
-end
-
-function OnFinishRecall(hero)
-    if hero.isMe then
-        meRecalling = false
-	elseif hero.name == partner.name then
-		pRecalling = false
-    end
-end
-
 function OnDeleteObj(object)
-	if object.name:find("yikes") then
-		FocusOfTower = false
-		yikesTurret = nil
-	elseif object.name:find("TeleportHome") and GetDistance(partner, object) < 70 then
+	if GetDistance(myHero, object) < 50 and object.name:lower():find("teleporthome") then
 		DelayAction(function() 
 		pRecalling = false 
 		end, 0.5, {0})
 	end
 end
 
-function OnCreateObj(object)
-	if object.name:find("yikes") then
+function OnProcessSpell(unit, spell)
+	
+	if unit.type == "obj_AI_Turret" and spell.name:lower():find("attack") and spell.target == player then 
+	
 		FocusOfTower = true
 		yikesTurret = GetCloseTower(player, TEAM_ENEMY)
-	elseif object.name:find("TeleportHome") and GetDistance(partner, object) < 70 then
+	end
+end
+
+function OnCreateObj(object)
+	if GetDistance(myHero, object) < 50 and object.name:lower():find("teleporthome") then
 		pRecalling = true
 	end
 end
@@ -501,6 +521,7 @@ end
 
 function OnTick()
 	if #allies < 4 then allies = GetPlayers(player.team, true, false) end
+
 	if(config.enableScript)then
 		root:run()
 	end
@@ -538,39 +559,6 @@ function drawMenu()
 	config.followChamp:addParam("drawFollowDist", "Draw Distance of Follow", SCRIPT_PARAM_ONOFF, true)
 end
 
-function initVariables()
-	
-	bottomPoint = Vector(12100, 2100)
-	--summoners
-	DEFAULT_FOLLOW_DISTANCE = 400
-	DEFAULT_MANA_REGEN = 80
-	DEFAULT_HP_REGEN = 80
-
-	--CONSTANTS
-	MIN_DISTANCE = 275
-	HEAL_DISTANCE = 700
-	DEFAULT_HEALTH_THRESHOLD = 70
-	DEFAULT_MANA_THRESHOLD = 66
-
-	AFK_MAXTIME = 120
-	SCRIPT_START_TIME = os.clock() + 60 -- change the adc selecting time
-	lastPartnerMove = nil
-	
-	FocusOfTower = false
-	partner = nil
-	temp_partner = nil
-	pAfk = true
-	pRecalling = false -- is Partner Recalling?
-	meRecalling = false
-	yikesTurret = nil
-	collectTimer = true
-
-	-- spawn
-	allySpawn = nil
-	enemySpawn = nil
-
-	detectSpawnPoints()
-end
 
 
 function OnLoad()
@@ -578,7 +566,11 @@ function OnLoad()
 	initVariables()
 	drawMenu()
 	mountBehaviorTree()
-	PrintChat("Passive Follow Loaded")
+	print("Passive Follow Loaded")
 	allies = GetPlayers(player.team, true, false)
+	
+	--[[if AutoUpdate then
+		Update()
+	end]]
 end
 
