@@ -500,7 +500,7 @@ function OnDraw()
 end
 
 function OnTick()
-	if #allies < 5 then allies = GetPlayers(player.team, true, false) end
+	if #allies < 4 then allies = GetPlayers(player.team, true, false) end
 	if(config.enableScript)then
 		root:run()
 	end
