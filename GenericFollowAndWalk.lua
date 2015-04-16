@@ -580,9 +580,5 @@ function OnLoad()
 	mountBehaviorTree()
 	PrintChat("Passive Follow Loaded")
 	allies = GetPlayers(player.team, true, false)
-	
-	if AutoUpdate then
-		Update()
-	end
 end
 
