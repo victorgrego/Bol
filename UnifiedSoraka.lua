@@ -1,4 +1,4 @@
-local version = "1.29"
+local version = "1.3"
 
 require "VPrediction"
 
@@ -331,16 +331,14 @@ end
 -- obCreatObj
 function OnCreateObj(obj)
 	-- Check if player is recalling and set isrecalling
-	if obj.name:find("TeleportHome") then
-		if GetDistance(myHero, obj) <= 70 then
-			isRecalling = true
-		end
+	if GetDistance(myHero, obj) < 50 and obj.name:lower():find("teleporthome") then
+		isRecalling = true
 	end
 end
 
 -- OnDeleteObj
 function OnDeleteObj(obj)
-	if obj.name:find("TeleportHome") then
+	if GetDistance(myHero, obj) < 50 and obj.name:lower():find("teleporthome") then
 		-- Set isRecalling off after short delay to prevent using abilities once at base
 		DelayAction(function() isRecalling = false end, RECALL_DELAY)
 	end
@@ -350,17 +348,15 @@ end
 function OnTick()
 	-- Check if script should be run
 	--if not Menu.common.enableScript then return end
+	if (isRecalling) then
+		return -- Don't perform recall canceling actions
+	end
 	
 	-- Auto Level
 	if Menu.common.autoLevel and myHero.level > GetHeroLeveled() then
 		LevelSpell(levelSequence[GetHeroLeveled() + 1])
 	end
 	
-	-- Recall Check
-	if (isRecalling) then
-		return -- Don't perform recall canceling actions
-	end
-
 	-- Auto Ult (R)
 	if Menu.autoUlt.enabled and myHero:CanUseSpell(_R) == READY then
 		doSorakaUlt()
