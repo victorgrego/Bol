@@ -1,4 +1,4 @@
-local version = "1.3"
+local version = "1.35"
 
 require "VPrediction"
 
@@ -96,7 +96,7 @@ end
 local GLOBAL_RANGE = 0
 local NO_RESOURCE = 0
 local DEFAULT_STARCALL_MODE = 3
-local DEFAULT_STARCALL_MIN_MANA = 300 --Starcall will not be cast if mana is below this level
+local DEFAULT_STARCALL_MIN_MANA = 50 --Starcall will not be cast if mana is below this level
 local DEFAULT_NUM_HIT_MINIONS = 3 -- number of minions that need to be hit by starcall before its cast
 local DEFAULT_HEAL_MODE = 2
 local DEFAULT_HEAL_THRESHOLD = 75 -- for healMode 3, default 75 (75%)
@@ -302,7 +302,7 @@ function drawMenu()
 
 	Menu.autoHeal:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
 	Menu.autoHeal:addParam("healThreshold", "Heal Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_HEAL_THRESHOLD, 0, 100, 0)
-	Menu.autoHeal:addParam("healMinMana", "Starcall Minimum Mana (%)", SCRIPT_PARAM_SLICE, DEFAULT_STARCALL_MIN_MANA, 0, 100, 0)
+	Menu.autoHeal:addParam("healMinMana", "Heal Minimum Mana (%)", SCRIPT_PARAM_SLICE, DEFAULT_STARCALL_MIN_MANA, 0, 100, 0)
 	Menu.autoHeal:addParam("sorakaThreshold", "Soraka HP Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_HEAL_THRESHOLD, 5, 100, 0)
 
 	Menu.autoStarcall:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
