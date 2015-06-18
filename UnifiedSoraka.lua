@@ -1,6 +1,6 @@
-local version = "1.35"
+local version = "1.4"
 
-require "VPrediction"
+require "DivinePred"
 
 --[[
 UnifiedSoraka by VictorGrego
@@ -46,57 +46,18 @@ shopList = {
 	3089--Rabadon
 }
 
+
+
 nextbuyIndex = 1
 lastBuy = 0
 
 buyDelay = 100 --default 100
 
---UPDATE SETTINGS
-local AutoUpdate = true
-local SELF = SCRIPT_PATH..GetCurrentEnv().FILE_NAME
-local URL = "https://raw.githubusercontent.com/victorgrego/Bol/master/UnifiedSoraka.lua?"..math.random(100)
-local UPDATE_TMP_FILE = LIB_PATH.."UNSTmp.txt"
-local versionmessage = "<font color=\"#81BEF7\" >Changelog: Added autobuy option and changed build to spam skills</font>"
-
-function Update()
-	DownloadFile(URL, UPDATE_TMP_FILE, UpdateCallback)
-end
-
-function UpdateCallback()
-	file = io.open(UPDATE_TMP_FILE, "rb")
-	if file ~= nil then
-		content = file:read("*all")
-		file:close()
-		os.remove(UPDATE_TMP_FILE)
-		if content then
-			tmp, sstart = string.find(content, "local version = \"")
-			if sstart then
-				send, tmp = string.find(content, "\"", sstart+1)
-			end
-			if send then
-				Version = tonumber(string.sub(content, sstart+1, send-1))
-			end
-			if (Version ~= nil) and (Version > tonumber(version)) and content:find("--EOS--") then
-				file = io.open(SELF, "w")
-			if file then
-				file:write(content)
-				file:flush()
-				file:close()
-				PrintChat("<font color=\"#81BEF7\" >UnifiedSoraka:</font> <font color=\"#00FF00\">Successfully updated to: v"..Version..". Please reload the script with F9.</font>")
-			else
-				PrintChat("<font color=\"#81BEF7\" >UnifiedSoraka:</font> <font color=\"#FF0000\">Error updating to new version (v"..Version..")</font>")
-			end
-			elseif (Version ~= nil) and (Version == tonumber(version)) then
-				PrintChat("<font color=\"#81BEF7\" >UnifiedSoraka:</font> <font color=\"#00FF00\">No updates found, latest version: v"..Version.." </font>")
-			end
-		end
-	end
-end
 -- Constants (do not change)
 local GLOBAL_RANGE = 0
 local NO_RESOURCE = 0
 local DEFAULT_STARCALL_MODE = 3
-local DEFAULT_STARCALL_MIN_MANA = 50 --Starcall will not be cast if mana is below this level
+local DEFAULT_STARCALL_MIN_MANA = 300 --Starcall will not be cast if mana is below this level
 local DEFAULT_NUM_HIT_MINIONS = 3 -- number of minions that need to be hit by starcall before its cast
 local DEFAULT_HEAL_MODE = 2
 local DEFAULT_HEAL_THRESHOLD = 75 -- for healMode 3, default 75 (75%)
@@ -152,15 +113,16 @@ function doSorakaStarcall()
 		pos, info = Prodiction.GetPrediction(ts.target, STARCALL_RANGE, nil, 0.25, 125, nil)
 		pro = true
 	else]]
-	pos, hitchance = VP:GetPredictedPos(TargetSelector.target, 0.25, 2000, myHero, true)
+	local state, hitPos, perc = DP:predict(TargetSelector.target, sorakaStarcall);
+	--pos, hitchance = VP:GetPredictedPos(TargetSelector.target, 0.25, 2000, myHero, true)
 	--end
 	
 	if Menu.autoStarcall.starcallTowerDive == false and UnderTurret(myHero, true) == true and info ~= nil and (info.hitchance ~=0 or hitchance ~= 0) then return end
 	
 	--if pro and pos and info.hitchance ~= 0 then 
 	--	CastSpell(_Q, pos.x, pos.z)
-	if hitchance ~= 0 then
-		CastSpell(_Q, pos.x, pos.z)
+	if state == sorakaStarcall.STATUS.SUCCESS_HIT then
+		CastSpell(_Q, hitPos.x, hitPos.z)
 	end
 end
 
@@ -221,13 +183,15 @@ function doSorakaEquinox()
 	if not TargetSelector.target then return end  
 	local pos, info, hitchance
 	local pro = false;
-
-	pos, hitchance = VP:GetPredictedPos(TargetSelector.target, 0.25, 2000, myHero, true)
+	
+	local state, hitPos, perc = DP:predict(TargetSelector.target, sorakaEquinox);
+	
+	--pos, hitchance = VP:GetPredictedPos(TargetSelector.target, 0.25, 2000, myHero, true)
 	
 	if Menu.autoStarcall.starcallTowerDive == false and UnderTurret(myHero, true) == true and (hitchance ~= 0) then return end
 
-	if hitchance ~= 0 then
-		CastSpell(_E, pos.x, pos.z)
+	if state == sorakaEquinox.STATUS.SUCCESS_HIT then
+		CastSpell(_E, hitPos.x, hitPos.z)
 	end
 end
 
@@ -302,7 +266,7 @@ function drawMenu()
 
 	Menu.autoHeal:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
 	Menu.autoHeal:addParam("healThreshold", "Heal Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_HEAL_THRESHOLD, 0, 100, 0)
-	Menu.autoHeal:addParam("healMinMana", "Heal Minimum Mana (%)", SCRIPT_PARAM_SLICE, DEFAULT_STARCALL_MIN_MANA, 0, 100, 0)
+	Menu.autoHeal:addParam("healMinMana", "Starcall Minimum Mana (%)", SCRIPT_PARAM_SLICE, DEFAULT_STARCALL_MIN_MANA, 0, 100, 0)
 	Menu.autoHeal:addParam("sorakaThreshold", "Soraka HP Threshold (%)", SCRIPT_PARAM_SLICE, DEFAULT_HEAL_THRESHOLD, 5, 100, 0)
 
 	Menu.autoStarcall:addParam("enabled", "Enable", SCRIPT_PARAM_ONOFF, true)
@@ -391,7 +355,11 @@ function OnLoad()
 	lastBuy = 0
 
 	
-	VP = VPrediction()
+	DP = DivinePred()
+	predictionCD = 200
+	predict = true;
+	sorakaStarcall = CircleSS(2000,STARCALL_RANGE, 300, 0.25, true);
+	sorakaEquinox = CircleSS(20000,EQUINOX_RANGE, 300, 0.25, true);
 	
 	--[[if AutoUpdate then
 		Update()
