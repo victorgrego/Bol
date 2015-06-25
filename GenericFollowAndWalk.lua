@@ -1,4 +1,4 @@
-local version = "1.2"
+local version = "1.3"
 --[[
     Passive Follow by VictorGrego.
 ]]
@@ -12,47 +12,7 @@ MenuTextSize = 18
 allies = {}
 preferences = {FOLLOW_PARTNER = 0, GO_BASE = 0}
 
---UPDATE SETTINGS
-local AutoUpdate = true
-local SELF = SCRIPT_PATH..GetCurrentEnv().FILE_NAME
-local URL = "https://raw.githubusercontent.com/victorgrego/BolSorakaScripts/master/GenericFollowAndWalk.lua?"..math.random(100)
-local UPDATE_TMP_FILE = LIB_PATH.."GFWTmp.txt"
-local versionmessage = "<font color=\"#81BEF7\" >Minor BugFix</font>"
 
-function Update()
-	DownloadFile(URL, UPDATE_TMP_FILE, UpdateCallback)
-end
-
-function UpdateCallback()
-	file = io.open(UPDATE_TMP_FILE, "rb")
-	if file ~= nil then
-		content = file:read("*all")
-		file:close()
-		os.remove(UPDATE_TMP_FILE)
-		if content then
-			tmp, sstart = string.find(content, "local version = \"")
-			if sstart then
-				send, tmp = string.find(content, "\"", sstart+1)
-			end
-			if send then
-				Version = tonumber(string.sub(content, sstart+1, send-1))
-			end
-			if (Version ~= nil) and (Version > tonumber(version)) and content:find("--EOS--") then
-				file = io.open(SELF, "w")
-			if file then
-				file:write(content)
-				file:flush()
-				file:close()
-				PrintChat("<font color=\"#81BEF7\" >GenericFollowAndWalk:</font> <font color=\"#00FF00\">Successfully updated to: v"..Version..". Please reload the script with F9.</font>")
-			else
-				PrintChat("<font color=\"#81BEF7\" >GenericFollowAndWalk:</font> <font color=\"#FF0000\">Error updating to new version (v"..Version..")</font>")
-			end
-			elseif (Version ~= nil) and (Version == tonumber(version)) then
-				PrintChat("<font color=\"#81BEF7\" >GenericFollowAndWalk:</font> <font color=\"#00FF00\">No updates found, latest version: v"..Version.." </font>")
-			end
-		end
-	end
-end
 
 function initVariables()
 	
@@ -294,7 +254,7 @@ function Action:run()
 	
 	actions["recall"] = function()
 		--PrintChat("Recalling")
-		if not InFountain() then CastSpell(RECALL) end
+		if not InFountain() then PRecall() end
 		return true
 	end
 	
@@ -306,6 +266,28 @@ end
 --End of Classes area
 
 --Util Section
+function PRecall()
+	local p = CLoLPacket(0x0050)
+	p.vTable = 0xE73EF8
+	p:EncodeF(myHero.networkID)
+	p:Encode4(0xF891B9F5)
+	p:Encode2(0xB4B1)
+	p:Encode2(0x0000)
+	p:Encode2(0xFDB1)
+	p:Encode2(0x0000)
+	p:Encode1(0xEE)
+	p:Encode1(0x6D)
+	p:Encode2(0x3D3D)
+	p:Encode1(0x3C)
+	p:Encode4(0x95959595)
+	p:Encode4(0x95959595)
+	p:Encode1(0xF5)
+	p:Encode1(0xDC)
+	p:Encode2(0xE924)
+	p:Encode2(0x0000)
+	SendPacket(p)
+end
+
 function detectSpawnPoints()
 	for i=1, objManager.maxObjects, 1 do
 		local candidate = objManager:getObject(i)
@@ -488,15 +470,6 @@ function OnDeleteObj(object)
 	end
 end
 
-function OnProcessSpell(unit, spell)
-	
-	if unit.type == "obj_AI_Turret" and spell.name:lower():find("attack") and spell.target == player then 
-	
-		FocusOfTower = true
-		yikesTurret = GetCloseTower(player, TEAM_ENEMY)
-	end
-end
-
 function OnCreateObj(object)
 	if GetDistance(myHero, object) < 50 and object.name:lower():find("teleporthome") then
 		pRecalling = true
@@ -517,14 +490,6 @@ function OnDraw()
 	if partner ~= nil then DrawCircle(partner.x, partner.y, partner.z, 70, ARGB(200,255,255,0)) end
 	if config.followChamp.drawFollowDist then DrawCircle(myHero.x, myHero.y, myHero.z, config.followChamp.followDist, ARGB(200,1,33,0)) end
 	drawFollowMenu()
-end
-
-function OnTick()
-	if #allies < 4 then allies = GetPlayers(player.team, true, false) end
-
-	if(config.enableScript)then
-		root:run()
-	end
 end
 
 function OnWndMsg(msg, keycode)
@@ -559,7 +524,75 @@ function drawMenu()
 	config.followChamp:addParam("drawFollowDist", "Draw Distance of Follow", SCRIPT_PARAM_ONOFF, true)
 end
 
+adviceStringsPT = {
+EEscapeAdvice = {"Usa o W para fugir!", "Foge com o W", "O W te ajuda a fugir", "Usa o W pra trás"},
+	heroFocus = {"Cuidado com os bots", "Foge deles!", "Cuidado que eles estão te tando dano."},
+	towerFocus = {"Cuidado com a torre!", "A torre está te atacando, cuidado!", "Sai da parte vermelha", "Foge da torre!"},
+	minionsFocus = {"Os minions estão te atacando, melhor recuar","Cuidado com os minions", "Os minios vão te matar"},
+	healthAdvice = {"Vc está com hp baixo, vai base!", "Melhor vc ir base", "Aperta B e vai base", "Vc ta com pouca vida, melhor ir base", "Se você tiver poção usa, senão melhor ir base"},
+	lastHit = {"Tenta acertar o último ataque nos minions.", "Dá o último golpe nos minions que vc vai ganhar ouro"},
+	safePosition = {"Joga mais recuado.", "Tenta jogar mais perto da torre"},
+	manaAdvice = {"Voce está gastando muita mana", "Tenta economizar mana", "Guarda mana para usar poder nos inimigos"},
+ 	QFarmAdvice = {"Usa o Q para farmar", "Usa o Q nos minions pra matar", "Se vc usar o Q fica mais facil farmar"}, -- draven, ezreal, urgot
+	QHarassAdvice = {"Usa o Q para dar dano nos bots", "Tenta acertar o Q nos inimigos", "Dá Q nos inimigos"}, -- sivir, ezreal, caitlyn, urgot, varus, kalista, kog maw, graves, corki, draven, Quinn, Luzcian, miss fortune
+	WEscapeAdvice = {"Usa o W para fugir!", "Foge com o W", "O W te ajuda a fugir", "Usa o W pra trás"}, -- Corki, Draven, Tristana, Caitlyn, Ezreal, Graves, Lucian
+	RKillAdvice = {"Usa R pra matar os bots", "Mata ele com o R", "Dá R nele"},
+	cheerByKilling = {"Nice!", "GJ", "Massa", "Bom trabalho", "Boa!"}
+}
 
+adviceStringTimers = {
+	heroFocus = 180, heroFocusL = os.clock(),
+	towerFocus = 180, towerFocusL = os.clock(),
+	minionsFocus = 180, minionsFocusL = os.clock(),
+	healthAdvice = 240, healthAdviceL = os.clock(),
+	lastHit = 180, lastHitL = os.clock(),
+	safePosition = 180, safePositionL = os.clock(),
+	manaAdvice = 600, manaAdviceL = os.clock(),
+ 	QFarmAdvice = 600, QFarmAdviceL = os.clock(), -- draven, ezreal, urgot
+	QHarassAdvice = 600, QHarassAdviceL = os.clock(),-- sivir, ezreal, caitlyn, urgot, varus, kalista, kog maw, graves, corki, draven, Quinn, Luzcian, miss fortune
+	WEscapeAdvice = 600, WEscapeAdviceL = os.clock(), -- Corki, Draven, Tristana
+	EEscapeAdvice = 600, EEscapeAdviceL = os.clock(), -- Caitlyn, Ezreal, Graves, Lucian
+	RKillAdvice = 600, RKillAdviceL = os.clock(),
+	cheerByKilling = 300, cheerByKilling = os.clock()
+}
+
+--[[
+	Implemented:
+	Enemy focus
+	Enemy tower Focus
+	Enemy minions Focus
+	
+]]
+
+function OnProcessSpell(unit, spell)
+	if unit.type == "obj_AI_Turret" and spell.name:lower():find("attack") and spell.target == player then 
+		FocusOfTower = true
+		yikesTurret = GetCloseTower(player, TEAM_ENEMY)
+	end
+
+	if spell.target ~= nil and  unit.team ~= myHero.team and spell.target.name == partner.name then 
+		--print("Detected!")
+		if unit.type == myHero.type and os.clock() > adviceStringTimers.heroFocusL + adviceStringTimers.heroFocus then
+			SendChat(adviceStringsPT.heroFocus[math.floor(math.random(#adviceStringsPT.heroFocus))])
+			adviceStringTimers.heroFocusL = os.clock()
+		elseif unit.name:lower():find("minion")~=nil and os.clock() > adviceStringTimers.minionsFocusL + adviceStringTimers.minionsFocus then
+			SendChat(adviceStringsPT.minionsFocus[math.floor(math.random(#adviceStringsPT.minionsFocus))])
+			adviceStringTimers.minionsFocusL = os.clock()
+		elseif unit.type == "obj_AI_Turret" and spell.name:lower():find("attack") and os.clock() > adviceStringTimers.towerFocusL + adviceStringTimers.towerFocus then
+			SendChat(adviceStringsPT.towerFocus[math.floor(math.random(#adviceStringsPT.towerFocus))])
+			adviceStringTimers.towerFocusL = os.clock()
+		end
+	end
+end
+
+function OnTick()
+
+	if #allies < 4 then allies = GetPlayers(player.team, true, false) end
+
+	if(config.enableScript)then
+		root:run()
+	end
+end
 
 function OnLoad()
 	player = GetMyHero()
