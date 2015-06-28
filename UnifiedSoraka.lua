@@ -1,4 +1,4 @@
-local version = "1.51"
+local version = "1.511"
 
 require "HPrediction"
 
@@ -58,7 +58,7 @@ buyDelay = 100 --default 100
 local GLOBAL_RANGE = 0
 local NO_RESOURCE = 0
 local DEFAULT_STARCALL_MODE = 3
-local DEFAULT_STARCALL_MIN_MANA = 300 --Starcall will not be cast if mana is below this level
+local DEFAULT_STARCALL_MIN_MANA = 50 --Starcall will not be cast if mana is below this level
 local DEFAULT_NUM_HIT_MINIONS = 3 -- number of minions that need to be hit by starcall before its cast
 local DEFAULT_HEAL_MODE = 2
 local DEFAULT_HEAL_THRESHOLD = 75 -- for healMode 3, default 75 (75%)
