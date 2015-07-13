@@ -1,4 +1,4 @@
-local version = "1.3"
+local version = "1.4"
 --[[
     Passive Follow by VictorGrego.
 ]]
@@ -254,7 +254,7 @@ function Action:run()
 	
 	actions["recall"] = function()
 		--PrintChat("Recalling")
-		if not InFountain() then PRecall() end
+		if not InFountain() then CastSpell(RECALL) end
 		return true
 	end
 	
