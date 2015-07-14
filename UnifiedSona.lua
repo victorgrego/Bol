@@ -42,6 +42,7 @@ nextbuyIndex = 1
 lastBuy = 0
 lastBoughtItem = nil
 UP_TO_DATE = true
+buyDelay = 100 --default 100
 
 -------Orbwalk info-------
 local lastAttack, lastWindUpTime, lastAttackCD = 0, 0, 0
