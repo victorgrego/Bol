@@ -1,4 +1,4 @@
-local version = "1.511"
+local version = "1.512"
 
 require "HPrediction"
 
